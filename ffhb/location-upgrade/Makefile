@@ -1,6 +1,6 @@
 include $(TOPDIR)/rules.mk
 
-PKG_NAME:=location-upgrade
+PKG_NAME:=gluon-location-upgrade
 PKG_VERSION:=1
 PKG_RELEASE:=1
 
@@ -8,14 +8,14 @@ PKG_BUILD_DIR := $(BUILD_DIR)/$(PKG_NAME)
 
 include $(INCLUDE_DIR)/package.mk
 
-define Package/location-upgrade
+define Package/gluon-location-upgrade
   SECTION:=ffhb
   CATEGORY:=Gluon
   TITLE:=Move system.location to gluon-location
-  DEPENDS:=+location-upgrade
+  DEPENDS:=+gluon-location
 endef
 
-define Package/location-upgrade/description
+define Package/gluon-location-upgrade/description
 	This packages moves the location information to the new config path.
 endef
 
@@ -29,8 +29,8 @@ endef
 define Build/Compile
 endef
 
-define Package/location-upgrade/install
+define Package/gluon-location-upgrade/install
 	$(CP) ./files/* $(1)/
 endef
 
-$(eval $(call BuildPackage,location-upgrade))
+$(eval $(call BuildPackage,gluon-location-upgrade))

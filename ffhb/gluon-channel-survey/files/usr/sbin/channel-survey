@@ -1,0 +1,87 @@
+#!/usr/bin/lua
+
+local site = require 'gluon.site_config'
+local json = require 'luci.json'
+local ltn12 = require 'luci.ltn12'
+
+-- ignore what we cause ourselves
+local ignore_essids = {
+    [site.wifi24.ssid] = true,
+    [site.wifi24.mesh_ssid] = true,
+    [site.wifi5.ssid] = true,
+    [site.wifi5.mesh_ssid] = true,
+}
+local result = {}
+local stations, bssid, station, dev
+
+local function iwscan(dev, options)
+    local cmd = 'iw dev ' .. tostring(dev) .. ' scan'
+    if options then
+        cmd = cmd .. tostring(options)
+    end
+    local fd = io.popen(cmd, 'r')
+    local stations = {}
+    local id = 0
+    local line
+    for line in fd:lines() do
+        repeat
+            if line:sub(1,4) == "BSS " then
+                id = id+1
+                stations[id] = { bssid = line:sub(5,5+16), htmode = '20' }
+                break
+            end
+            local match
+            match = line:match('freq: (%d+)$')
+            if match then
+                stations[id].freq = match
+                break
+            end
+            match = line:match('SSID: ([^%s]+)$')
+            if match then
+                stations[id].essid = match
+                break
+            end
+            match = line:match('* secondary channel offset: (%a+)$')
+            if match == 'below' then
+                stations[id].htmode = '40-'
+            elseif match == 'above' then
+                stations[id].htmode = '40+'
+            end
+        until true
+    end
+    return stations
+end
+
+for _, dev in ipairs({"wlan0", "wlan1"}) do
+    local scanresults = iwscan(dev)
+    if scanresults and #scanresults > 0 then
+        for _, station in ipairs(scanresults) do
+            local uniq = station.bssid:sub(4, -4):upper()
+            if station.htmode ~= 'ht20' then
+                uniq = uniq .. station.htmode:sub(-1)
+            end
+            local freq = tostring(station.freq)
+            if not result[freq] then
+                result[freq] = {}
+            end
+            if ignore_essids[station.essid] then
+                result[freq][uniq] = false
+            elseif result[freq][uniq] ~= false then
+                result[freq][uniq] = true
+            end
+        end
+    end
+end
+
+for freq, stations in pairs(result) do
+    local stationlist = {}
+    for bssid, station in pairs(stations) do
+        if station == true then
+            stationlist[#stationlist+1] = bssid:gsub(':', '')
+        end
+    end
+    result[freq] = stationlist
+end
+
+encoder = json.Encoder(result)
+ltn12.pump.all(encoder:source(), ltn12.sink.file(io.stdout))

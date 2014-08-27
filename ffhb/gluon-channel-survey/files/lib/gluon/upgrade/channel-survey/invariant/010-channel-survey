@@ -5,5 +5,5 @@ local minute = math.random(0, 59)
 -- Scan at a random time between 21:00 and 22:00
 local f = io.open('/lib/gluon/cron/channel-survey', 'w')
 f:write(string.format('%i 21 * * * /usr/sbin/channel-survey > /tmp/gluon/channel-survey.cache\n', minute))
-f:write('*/5 * * * gzip < /tmp/gluon/channel-survey.cache | alfred -s 190')
+f:write('*/5 * * * * gzip < /tmp/gluon/channel-survey.cache | alfred -s 190')
 f:close()

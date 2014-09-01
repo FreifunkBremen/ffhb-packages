@@ -57,7 +57,7 @@ for _, dev in ipairs({"wlan0", "wlan1"}) do
     if scanresults and #scanresults > 0 then
         for _, station in ipairs(scanresults) do
             local uniq = station.bssid:sub(4, -4):upper()
-            if station.htmode ~= 'ht20' then
+            if station.htmode ~= '20' then
                 uniq = uniq .. station.htmode:sub(-1)
             end
             local freq = tostring(station.freq)

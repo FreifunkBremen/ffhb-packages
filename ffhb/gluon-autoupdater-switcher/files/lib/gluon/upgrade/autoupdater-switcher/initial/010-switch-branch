@@ -1,9 +1,0 @@
-#!/bin/sh
-
-set -e
-
-if [ "$(uci get autoupdater.settings.last_autochange)" != 20140324 ]; then
-    uci set autoupdater.settings.branch=testing
-    uci set autoupdater.settings.last_autochange=20140324
-    uci commit autoupdater
-fi

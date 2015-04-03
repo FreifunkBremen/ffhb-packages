@@ -1,0 +1,61 @@
+#!/usr/bin/lua
+
+require "iwinfo"
+
+local site = require 'gluon.site_config'
+
+local newchannel = site.channelswitcher.channel
+local dev = site.channelswitcher.dev
+local effective = site.channelswitcher.effective
+
+local uci = (require "luci.model.uci").cursor()
+local radio = "";
+local iface = "";
+uci:foreach("wireless", "wifi-iface", function(s)
+    if s.ifname == dev then
+        radio = s.device
+        iface = s[".name"]
+        return false
+    end
+end)
+local curchannel = tonumber(uci:get("wireless", radio, "channel"))
+
+if curchannel == newchannel then
+    print("Channel already switched, nothing to do.")
+    os.exit(0)
+end
+
+local switch = (os.time() >= effective)
+
+if not switch then
+    local api = iwinfo.type(dev)
+    if not api then
+        print("No such wireless device: " .. dev)
+        os.exit(1)
+    end
+
+    local scanresults = iwinfo[api].scanlist(dev)
+    if not scanresults or #scanresults == 0 then
+        print("No scan results or scanning not possible")
+        os.exit(1)
+    end
+
+    local network
+    for index,network in pairs(scanresults) do
+        if network.ssid == site.wifi24.mesh_ssid
+                and network.bssid == site.wifi24.mesh_bssid
+                and network.mode == "Ad-Hoc"
+                and tonumber(network.channel) == newchannel then
+            switch = true
+            break
+        end
+    end
+end
+
+if switch then
+    print("Switching channel from "..curchannel.." to "..newchannel)
+    uci:set("wireless", radio, "channel", newchannel)
+    uci:save("wireless")
+    uci:commit("wireless")
+    os.execute("wifi")
+end

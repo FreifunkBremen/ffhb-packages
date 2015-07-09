@@ -1,0 +1,21 @@
+local function traffic_sum(file)
+    return io.open("/sys/class/net/client0/statistics/" .. file):read("*n") + io.open("/sys/class/net/client1/statistics/" .. file):read("*n")
+end
+
+local traffic = {}
+
+for class, file in pairs({tx = 'rx', rx = 'tx'}) do
+    traffic[class] = {
+        bytes = traffic_sum(file .. '_bytes'),
+        packets = traffic_sum(file .. '_packets'),
+    }
+end
+
+for _,class in ipairs({'forward', 'mgmt_rx', 'mgmt_tx'}) do
+    traffic[class] = {
+        bytes = 0,
+        packets = 0,
+    }
+end
+
+return traffic

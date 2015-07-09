@@ -1,0 +1,8 @@
+local wifi24 = util.trim(util.exec("iw dev client0 station dump|grep '^Station'|wc -l"))
+local wifi50 = util.trim(util.exec("iw dev client1 station dump|grep '^Station'|wc -l"))
+
+return { total = wifi24+wifi50
+       , wifi  = wifi24+wifi50
+       , wifi24 = wifi24
+       , wifi50 = wifi50
+       }

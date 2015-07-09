@@ -1,0 +1,80 @@
+#!/usr/bin/lua
+
+local uci = require('luci.model.uci').cursor()
+local util = require 'gluon.util'
+
+uci:delete_all('network', 'switch_vlan')
+uci:section('network', 'switch_vlan', 'mgmt_vlan', {
+    vlan = 2,
+    ports = '0t 1 2t 3t 4t 5t',
+    device = 'switch0',
+})
+uci:section('network', 'switch_vlan', 'client_vlan', {
+    vlan = 1,
+    ports = '0t 1t 2t 3t 4t 5t',
+    device = 'switch0',
+})
+uci:section('network', 'switch_vlan', 'office_vlan', {
+    vlan = 3,
+    ports = '1t 2t 3t 4t 5t',
+    device = 'switch0',
+})
+uci:section('network', 'switch_vlan', 'port2_vlan', {
+    vlan = 12,
+    ports = '0t 2',
+    device = 'switch0',
+})
+uci:section('network', 'switch_vlan', 'port3_vlan', {
+    vlan = 13,
+    ports = '0t 3',
+    device = 'switch0',
+})
+uci:section('network', 'switch_vlan', 'port4_vlan', {
+    vlan = 14,
+    ports = '0t 4',
+    device = 'switch0',
+})
+uci:section('network', 'switch_vlan', 'port5_vlan', {
+    vlan = 15,
+    ports = '0t 5',
+    device = 'switch0',
+})
+uci:section('network', 'interface', 'port2', {
+    ifname = 'eth0.12',
+    proto = 'none',
+})
+uci:section('network', 'interface', 'port3', {
+    ifname = 'eth0.13',
+    proto = 'none',
+})
+uci:section('network', 'interface', 'port4', {
+    ifname = 'eth0.14',
+    proto = 'none',
+})
+uci:section('network', 'interface', 'port5', {
+    ifname = 'eth0.15',
+    proto = 'none',
+})
+uci:save('network')
+uci:commit('network')
+
+uci:set('lldpd', 'config', 'interface', {'eth0'})
+uci:save('lldpd')
+uci:commit('lldpd')
+
+uci:set('alfred', 'alfred', 'start_vis', '0')
+uci:delete('alfred', 'alfred', 'batmanif')
+uci:save('alfred')
+uci:commit('lldpd')
+
+local function reject_input_on_wan(zone)
+    if zone.name == 'wan' then
+        uci:set('firewall', zone['.name'], 'input', 'ACCEPT')
+        uci:set('firewall', zone['.name'], 'conntrack', '0')
+    end
+
+    return true
+end
+uci:foreach('firewall', 'zone', reject_input_on_wan)
+uci:save('firewall')
+uci:commit('firewall')

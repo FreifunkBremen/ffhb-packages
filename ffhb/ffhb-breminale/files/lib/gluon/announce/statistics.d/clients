@@ -1,5 +1,14 @@
-local wifi24 = util.trim(util.exec("iw dev client0 station dump|grep '^Station'|wc -l"))
-local wifi50 = util.trim(util.exec("iw dev client1 station dump|grep '^Station'|wc -l"))
+local function get_station_count(iface)
+    local cnt = 0
+    for line in util.execi("iw dev " .. iface .. " station dump") do
+        if line:match("^Station .+ %(on " .. iface .. "%)$") then
+            cnt = cnt + 1
+        end
+    end
+    return cnt
+end
+local wifi24 = get_station_count("client0")
+local wifi50 = get_station_count("client1")
 
 return { total = wifi24+wifi50
        , wifi  = wifi24+wifi50

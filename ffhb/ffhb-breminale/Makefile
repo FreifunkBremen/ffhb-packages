@@ -11,7 +11,7 @@ define Package/ffhb-breminale
   SECTION:=gluon
   CATEGORY:=Gluon
   TITLE:=Breminale
-  DEPENDS:=+respondd +lua-deflate +gluon-neighbour-info +gluon-ebtables
+  DEPENDS:=+respondd +lua-deflate +gluon-neighbour-info +gluon-ebtables +gluon-ebtables-filter-ra-dhcp +gluon-ebtables-filter-multicast
 endef
 
 define Package/ffhb-breminale/description

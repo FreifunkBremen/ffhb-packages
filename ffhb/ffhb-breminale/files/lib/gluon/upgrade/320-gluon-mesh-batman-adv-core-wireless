@@ -42,6 +42,18 @@ local function configure_radio(radio, index, config)
 	      }
   )
 
+  uci:delete('wireless', 'mgmt_' .. radio)
+  uci:section('wireless', 'wifi-iface', 'mgmt_' .. radio, {
+      device = radio,
+      network = 'wan',
+      mode = 'ap',
+      ssid = 'mgmt.ffhb.de',
+      macaddr = util.generate_mac(4, index),
+      ifname = 'mgmt' .. radio_suffix,
+      disabled = 0,
+      encryption = 'psk2',
+      key = '73t-m3-1n',
+  })
 end
 
 

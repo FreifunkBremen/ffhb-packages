@@ -59,16 +59,12 @@ uci:set('network', 'wan', 'peerdns', 1)
 uci:save('network')
 uci:commit('network')
 
-uci:set('lldpd', 'config', 'interface', {'eth0'})
-uci:save('lldpd')
-uci:commit('lldpd')
-
 uci:set('alfred', 'alfred', 'start_vis', '0')
 uci:delete('alfred', 'alfred', 'batmanif')
 uci:save('alfred')
 uci:commit('lldpd')
 
-local function reject_input_on_wan(zone)
+local function accept_input_on_wan(zone)
     if zone.name == 'wan' then
         uci:set('firewall', zone['.name'], 'input', 'ACCEPT')
         uci:set('firewall', zone['.name'], 'conntrack', '0')
@@ -76,6 +72,13 @@ local function reject_input_on_wan(zone)
 
     return true
 end
-uci:foreach('firewall', 'zone', reject_input_on_wan)
+uci:foreach('firewall', 'zone', accept_input_on_wan)
+uci:section('firewall', 'rule', 'client_alfred', {
+    name = 'client_alfred',
+    src = 'client',
+    dest_port = '16962',
+    proto = 'udp',
+    target = 'ACCEPT',
+})
 uci:save('firewall')
 uci:commit('firewall')

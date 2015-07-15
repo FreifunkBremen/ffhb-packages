@@ -11,14 +11,26 @@ local function DEC_HEX(IN)
     return OUT
 end
 
+local function split_part(str)
+    if #str == 0 then
+        return {"00", "00"}
+    elseif #str == 1 then
+        return {"00", "0" .. str}
+    elseif #str == 2 then
+        return {"00", str}
+    elseif #str == 3 then
+        return {"0" .. str:sub(1, 1), str:sub(2)}
+    elseif #str == 4 then
+        return {str:sub(1, 2), str:sub(3)}
+    end
+end
+
 local function get_port_neighbours(port, tq)
     local port_neighbours = {}
     for _, line in ipairs(util.split(util.exec("/usr/bin/ping6 -L -w 1 -I eth0.1" .. port .. " ff02:0:0:0:0:0:2:1001|awk '/ bytes from / {print $4}'|sort -u"))) do
-        for m1, m2, m3, m4, m5, m6 in line:gmatch("fe80::([a-f0-9]?[a-f0-9])([a-f0-9][a-f0-9]):([a-f0-9]?[a-f0-9])ff:fe([a-f0-9][a-f0-9]):([a-f0-9]?[a-f0-9])([a-f0-9][a-f0-9]):") do
-            if #m1 == 1 then m1 = "0" .. m1 end
-            if #m3 == 1 then m3 = "0" .. m3 end
-            if #m5 == 1 then m5 = "0" .. m5 end
-            local mac = DEC_HEX(tonumber(m1, 16) - 2) .. ":" .. m2 .. ":" .. m3 .. ":" .. m4 .. ":" .. m5 .. ":" .. m6
+        for m1, m2, m3, m4 in line:gmatch("fe80::([a-f0-9]*):([a-f0-9]*)ff:fe([a-f0-9]*):([a-f0-9]*):") do
+            local foo = {split_part(m1), split_part(m2), split_part(m3), split_part(m4)}
+            local mac = DEC_HEX(tonumber(foo[1][1], 16) - 2) .. ":" .. foo[1][2] .. ":" .. foo[2][2] .. ":" .. foo[3][2] .. ":" .. foo[4][1] .. ":" .. foo[4][2]
             port_neighbours[mac] = { tq = tq, lastseen = 0, port = port }
         end
     end

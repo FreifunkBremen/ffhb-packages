@@ -73,6 +73,14 @@ local function accept_input_on_wan(zone)
     return true
 end
 uci:foreach('firewall', 'zone', accept_input_on_wan)
+local function accept_icmpv6_on_client(rule)
+    if rule.name == 'Allow-ICMPv6-Input' then
+        uci:set('firewall', rule['.name'], 'src', 'client')
+    end
+
+    return true
+end
+uci:foreach('firewall', 'rule', accept_icmpv6_on_client)
 uci:section('firewall', 'rule', 'client_alfred', {
     name = 'client_alfred',
     src = 'client',

@@ -1,2 +1,2 @@
 #/bin/sh
-wget -O /dev/null http://$1.nodes.ffhb/cgi-bin/devzero
+wget -O /dev/null http://$1.nodes.ffhb.de/cgi-bin/devzero

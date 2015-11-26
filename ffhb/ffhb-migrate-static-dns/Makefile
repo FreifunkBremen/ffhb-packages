@@ -15,7 +15,7 @@ define Package/ffhb-migrate-static-dns
 endef
 
 define Package/ffhb-migrate-static-dns/description
-	Migrate DNS server config
+	Migrate DNS server config from old hacky FFHB version to official Gluon 2014.4 support
 endef
 
 define Build/Prepare

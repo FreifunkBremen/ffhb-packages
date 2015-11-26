@@ -14,7 +14,7 @@ define Package/gluon-speedtest
 endef
 
 define Package/gluon-speedtest/description
-	Gluon community wifi mesh firmware framework: Support for downloading /dev/zero via http for speed testing + /usr/sbin/speedtest
+	Support for downloading /dev/zero via http for speed testing + /usr/sbin/speedtest
 endef
 
 define Build/Prepare

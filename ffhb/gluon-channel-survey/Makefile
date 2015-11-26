@@ -16,7 +16,7 @@ define Package/gluon-channel-survey
 endef
 
 define Package/gluon-channel-survey/description
-	Gluon community wifi mesh firmware framework: channel usage survey module
+This package scans for neighbouring wifis in regular intervals and reports statistics about which channels these wifis reside on via alfred.
 endef
 
 define Build/Prepare

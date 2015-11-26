@@ -15,7 +15,7 @@ define Package/gluon-wan-dnsmasq-static
 endef
 
 define Package/gluon-wan-dnsmasq-static/description
-	Gluon community wifi mesh firmware framework: Support for a secondary DNS server using the WAN interface
+	Support for a secondary DNS server using the WAN interface. DO NOT USE ANYMORE! Gluon 2014.4 has official support for static DNS server configuration.
 endef
 
 define Build/Prepare

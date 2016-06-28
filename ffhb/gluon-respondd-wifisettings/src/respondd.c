@@ -9,20 +9,8 @@
 
 #include <respondd.h>
 
-
 const unsigned int INVALID_CHANNEL = 0;
 const unsigned int INVALID_TXPOWER = 0;
-
-static const char const *wifi_24_dev = "radio0";
-static const char const *wifi_50_dev = "radio1";
-
-static inline const char *lookup_option_value(struct uci_context *ctx, struct uci_package *p, const char *section_name, const char *option_name) {
-
-	struct uci_section *s = uci_lookup_section(ctx, p, section_name);
-	if (!s)
-		return NULL;
-	return uci_lookup_option_string(ctx, s, option_name);
-}
 
 static inline unsigned char parse_option(const char *s, unsigned char invalid) {
 	char *endptr = NULL;
@@ -45,26 +33,18 @@ static inline unsigned char parse_option(const char *s, unsigned char invalid) {
 	return (unsigned char)(result % UCHAR_MAX);
 }
 
-static inline unsigned char parse_channel(const char *s) {
-	return parse_option(s, INVALID_CHANNEL);
-}
-
-static inline unsigned char parse_txpower(const char *s) {
-	return parse_option(s, INVALID_TXPOWER);
-}
-
 static struct json_object *respondd_provider_nodeinfo(void) {
-	struct uci_package *p = NULL;
 	struct uci_context *ctx = NULL;
-	struct json_object *ret = NULL, *wireless = NULL;
+	struct uci_package *p = NULL;
+	struct uci_section *s;
+	struct uci_element *e;
+	struct json_object *ret = NULL, *wireless = NULL, *v;
+	unsigned char tmp;
 
 	ctx = uci_alloc_context();
 	if (!ctx)
 		goto end;
 	ctx->flags &= ~UCI_FLAG_STRICT;
-
-	if (uci_load(ctx, "wireless", &p))
-		goto end;
 
 	wireless = json_object_new_object();
 	if (!wireless)
@@ -74,36 +54,42 @@ static struct json_object *respondd_provider_nodeinfo(void) {
 	if (!ret)
 		goto end;
 
-	unsigned char tmp;
-	struct json_object *v;
+	if (uci_load(ctx, "wireless", &p))
+		goto end;
 
-	tmp = parse_channel(lookup_option_value(ctx, p, wifi_24_dev, "channel"));
-	if (tmp != INVALID_CHANNEL) {
-		v = json_object_new_int64(tmp);
-		if (!v)
-			goto end;
-		json_object_object_add(wireless, "chan2", v);
-	}
-	tmp = parse_channel(lookup_option_value(ctx, p, wifi_50_dev, "channel"));
-	if (tmp != INVALID_CHANNEL) {
-		v = json_object_new_int64(tmp);
-		if (!v)
-			goto end;
-		json_object_object_add(wireless, "chan5", v);
-	}
-	tmp = parse_channel(lookup_option_value(ctx, p, wifi_24_dev, "txpower"));
-	if (tmp != INVALID_TXPOWER) {
-		v = json_object_new_int64(tmp);
-		if (!v)
-			goto end;
-		json_object_object_add(wireless, "txpower2", v);
-	}
-	tmp = parse_channel(lookup_option_value(ctx, p, wifi_50_dev, "txpower"));
-	if (tmp != INVALID_TXPOWER) {
-		v = json_object_new_int64(tmp);
-		if (!v)
-			goto end;
-		json_object_object_add(wireless, "txpower5", v);
+	uci_foreach_element(&p->sections, e) {
+		s = uci_to_section(e);
+
+		if(!strncmp(s->type,"wifi-device",11)){
+			tmp = parse_option(uci_lookup_option_string(ctx, s, "channel"), INVALID_CHANNEL);
+			if (tmp != INVALID_CHANNEL) {
+				v = json_object_new_int64(tmp);
+				if (!v)
+					goto end;
+				if (tmp >= 1 && tmp <= 14){
+					json_object_object_add(wireless, "channel2", v);
+					tmp = parse_option(uci_lookup_option_string(ctx, s, "txpower"), INVALID_TXPOWER);
+					if (tmp != INVALID_TXPOWER) {
+						v = json_object_new_int64(tmp);
+						if (!v)
+							goto end;
+						json_object_object_add(wireless, "txpower2", v);
+					}
+				// FIXME lowes is 7, but i was able to differ between 2.4 Ghz and 5 Ghz by iwinfo_ops->frequency
+				// In EU and US it is 36, so it would be okay for the moment (https://en.wikipedia.org/wiki/List_of_WLAN_channels)
+				} else if (tmp >= 36 && tmp < 196){
+					json_object_object_add(wireless, "channel5", v);
+					tmp = parse_option(uci_lookup_option_string(ctx, s, "txpower"), INVALID_TXPOWER);
+					if (tmp != INVALID_TXPOWER) {
+						v = json_object_new_int64(tmp);
+						if (!v)
+							goto end;
+						json_object_object_add(wireless, "txpower5", v);
+					}
+				} else
+					json_object_object_add(wireless, "ErrorChannel", v);
+			}
+		}
 	}
 
 	json_object_object_add(ret, "wireless", wireless);

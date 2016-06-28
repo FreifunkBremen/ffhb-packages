@@ -12,7 +12,7 @@ include $(GLUONDIR)/include/package.mk
 define Package/gluon-respondd-wifisettings
   SECTION:=gluon
   CATEGORY:=Gluon
-  TITLE:=Add /etc/config/gluon-node-info to uci
+  TITLE:=Add wifisettings to respondd
   DEPENDS:=+gluon-core +libgluonutil
 endef
 

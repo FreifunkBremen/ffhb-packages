@@ -1,28 +1,17 @@
 #include <stdio.h>
-#include <signal.h>
 #include <unistd.h> /* sleep */
-#include <string.h> /* memset */
 
 #include "airtime.h"
 
 void print_result(struct airtime_result *);
 
-
-static volatile int keepRunning = 1;
-
-void intHandler(int dummy) {
-    keepRunning = 0;
-}
-
 int main() {
-	signal(SIGINT, intHandler);
-	struct airtime a;
-	memset(&a, 0, sizeof(a));
+	struct airtime *a;
 
-	while (keepRunning) {
-		get_airtime(&a);
-		print_result(&a.radio24);
-		print_result(&a.radio5);
+	while (1) {
+		a = get_airtime();
+		print_result(&a->radio24);
+		print_result(&a->radio5);
 		sleep(1);
 	}
 }

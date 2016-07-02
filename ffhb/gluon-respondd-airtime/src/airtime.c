@@ -10,6 +10,10 @@
 static const char const *wifi_24_dev = "wlan0";
 static const char const *wifi_5_dev  = "wlan1";
 
+static struct airtime cur_airtime = {
+	{ .frequency = 0 },
+	{ .frequency = 0 },
+};
 
 /*
  * Excerpt from nl80211.h:
@@ -139,7 +143,9 @@ out:
 	return error;
 }
 
-void get_airtime(struct airtime *ret) {
-	get_airtime_for_interface(&ret->radio24, wifi_24_dev);
-	get_airtime_for_interface(&ret->radio5,  wifi_5_dev);
+struct airtime* get_airtime() {
+	get_airtime_for_interface(&cur_airtime.radio24, wifi_24_dev);
+	get_airtime_for_interface(&cur_airtime.radio5,  wifi_5_dev);
+
+	return &cur_airtime;
 }

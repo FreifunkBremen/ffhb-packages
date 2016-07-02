@@ -1,5 +1,3 @@
-#define _GNU_SOURCE
-
 #include <sys/socket.h>
 #include <linux/nl80211.h>
 #include <netlink/netlink.h>
@@ -7,18 +5,37 @@
 #include <netlink/genl/ctrl.h>
 #include <net/if.h>
 
-#include "package.h"
+#include "airtime.h"
 
-const double INVALID_AIRTIME = -1;
+static const char const *wifi_24_dev = "wlan0";
+static const char const *wifi_5_dev  = "wlan1";
 
-static const char const *wifi_24_dev = "client0";
-static const char const *wifi_5_dev = "client1";
 
-struct airtime_result {
-	uint32_t frequency;
-	uint64_t active_time;
-	uint64_t busy_time;
-};
+/*
+ * Excerpt from nl80211.h:
+ * enum nl80211_survey_info - survey information
+ *
+ * These attribute types are used with %NL80211_ATTR_SURVEY_INFO
+ * when getting information about a survey.
+ *
+ * @__NL80211_SURVEY_INFO_INVALID: attribute number 0 is reserved
+ * @NL80211_SURVEY_INFO_FREQUENCY: center frequency of channel
+ * @NL80211_SURVEY_INFO_NOISE: noise level of channel (u8, dBm)
+ * @NL80211_SURVEY_INFO_IN_USE: channel is currently being used
+ * @NL80211_SURVEY_INFO_CHANNEL_TIME: amount of time (in ms) that the radio
+ *	spent on this channel
+ * @NL80211_SURVEY_INFO_CHANNEL_TIME_BUSY: amount of the time the primary
+ *	channel was sensed busy (either due to activity or energy detect)
+ * @NL80211_SURVEY_INFO_CHANNEL_TIME_EXT_BUSY: amount of time the extension
+ *	channel was sensed busy
+ * @NL80211_SURVEY_INFO_CHANNEL_TIME_RX: amount of time the radio spent
+ *	receiving data
+ * @NL80211_SURVEY_INFO_CHANNEL_TIME_TX: amount of time the radio spent
+ *	transmitting data
+ * @NL80211_SURVEY_INFO_MAX: highest survey info attribute number
+ *	currently defined
+ * @__NL80211_SURVEY_INFO_AFTER_LAST: internal use
+ */
 
 static int survey_airtime_handler(struct nl_msg *msg, void *arg)
 {
@@ -33,10 +50,6 @@ static int survey_airtime_handler(struct nl_msg *msg, void *arg)
 
 	result = (struct airtime_result *) arg;
 
-	/* another callback was already successful */
-	if (result->frequency)
-		return NL_SKIP;
-
 	gnlh = nlmsg_data(nlmsg_hdr(msg));
 	if (!gnlh)
 		goto error;
@@ -49,44 +62,43 @@ static int survey_airtime_handler(struct nl_msg *msg, void *arg)
 	if (nla_parse_nested(sinfo, NL80211_SURVEY_INFO_MAX, tb[NL80211_ATTR_SURVEY_INFO], survey_policy))
 		goto abort;
 
-	if (!sinfo[NL80211_SURVEY_INFO_CHANNEL_TIME])
-		goto abort;
-	if (!sinfo[NL80211_SURVEY_INFO_CHANNEL_TIME_BUSY])
-		goto abort;
-	if (!sinfo[NL80211_SURVEY_INFO_FREQUENCY])
+	// Channel inactive?
+	if (!sinfo[NL80211_SURVEY_INFO_IN_USE])
 		goto abort;
 
-	result->frequency = (uint32_t)nla_get_u32(sinfo[NL80211_SURVEY_INFO_FREQUENCY]),
-	result->active_time = (uint64_t)nla_get_u64(sinfo[NL80211_SURVEY_INFO_CHANNEL_TIME]);
-	result->busy_time = (uint64_t)nla_get_u64(sinfo[NL80211_SURVEY_INFO_CHANNEL_TIME_BUSY]);
+	result->frequency   = nla_get_u32(sinfo[NL80211_SURVEY_INFO_FREQUENCY]),
+	result->active_time = nla_get_u64(sinfo[NL80211_SURVEY_INFO_CHANNEL_TIME]);
+	result->busy_time   = nla_get_u64(sinfo[NL80211_SURVEY_INFO_CHANNEL_TIME_BUSY]);
+	result->rx_time     = nla_get_u64(sinfo[NL80211_SURVEY_INFO_CHANNEL_TIME_RX]);
+	result->tx_time     = nla_get_u64(sinfo[NL80211_SURVEY_INFO_CHANNEL_TIME_TX]);
+	result->noise       = nla_get_u8(sinfo[NL80211_SURVEY_INFO_NOISE]);
 
 error:
 abort:
 	return NL_SKIP;
 }
 
-static double get_airtime_for_interface(const char *interface) {
-	double ret = INVALID_AIRTIME;
+static int get_airtime_for_interface(struct airtime_result *result, const char *interface) {
+	int error = 0;
 	int ctrl, ifx, flags;
 	struct nl_sock *sk = NULL;
 	struct nl_msg *msg = NULL;
 	enum nl80211_commands cmd;
-	struct airtime_result *result = NULL;
 
-#define CHECK(x) { if (!(x)) { printf("error on line %d\n",  __LINE__); goto error; } }
+#define CHECK(x) { if (!(x)) { printf("error on line %d\n",  __LINE__); error = 1; goto out; } }
 
 	CHECK(sk = nl_socket_alloc());
 	CHECK(genl_connect(sk) >= 0);
 
 	CHECK(ctrl = genl_ctrl_resolve(sk, NL80211_GENL_NAME));
-	CHECK(result = calloc(1, sizeof(*result)));
-	CHECK(nl_socket_modify_cb(
-		sk, NL_CB_VALID, NL_CB_CUSTOM, survey_airtime_handler, result) == 0);
+	CHECK(nl_socket_modify_cb(sk, NL_CB_VALID, NL_CB_CUSTOM, survey_airtime_handler, result) == 0);
 	CHECK(msg = nlmsg_alloc());
 
 	/* device does not exist */
-	if (!(ifx = if_nametoindex(interface)))
-	        goto error;
+	if (!(ifx = if_nametoindex(interface))){
+		error = -1;
+		goto out;
+	}
 
 	cmd = NL80211_CMD_GET_SURVEY;
 	flags = 0;
@@ -100,29 +112,17 @@ static double get_airtime_for_interface(const char *interface) {
 	CHECK(nl_send_auto_complete(sk, msg) >= 0);
 	CHECK(nl_recvmsgs_default(sk) >= 0);
 
-	ret = ((double) result->busy_time) / result->active_time;
-
 #undef CHECK
 
+nla_put_failure:
 out:
 	if (msg)
 		nlmsg_free(msg);
-	msg = NULL;
 
 	if (sk)
 		nl_socket_free(sk);
-	sk = NULL;
 
-	if (result)
-	free(result);
-	result = NULL;
-
-	return ret;
-
-nla_put_failure:
-error:
-	ret = INVALID_AIRTIME;
-	goto out;
+	return error;
 }
 
 struct airtime *get_airtime(void) {
@@ -130,8 +130,8 @@ struct airtime *get_airtime(void) {
 	if (!ret)
 		return NULL;
 
-	ret->a24 = get_airtime_for_interface(wifi_24_dev);
-	ret->a5 = get_airtime_for_interface(wifi_5_dev);
+	get_airtime_for_interface(&ret->radio24, wifi_24_dev);
+	get_airtime_for_interface(&ret->radio5,  wifi_5_dev);
 
 	return ret;
 }

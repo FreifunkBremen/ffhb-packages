@@ -5,7 +5,7 @@
 
 #include <respondd.h>
 
-#include "package.h"
+#include "airtime.h"
 
 /* FIXME error handling */
 static struct json_object *respondd_provider_statistics(void) {
@@ -48,5 +48,5 @@ end:
 
 const struct respondd_provider_info respondd_providers[] = {
 	{"statistics", respondd_provider_statistics},
-	{0},
+	{0, 0},
 };

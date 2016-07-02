@@ -7,7 +7,7 @@ CFLAGS         += -std=c99
 
 # warnings
 CFLAGS         += -Wall -Wextra -Wformat=2 -Wshadow -Wpointer-arith -Wcast-qual
-CFLAGS         += -Wmissing-prototypes -pedantic
+CFLAGS         += -pedantic
 
 LDFLAGS = -L${GLUON_DIR}/build/ar71xx-generic/openwrt/staging_dir/target-mips_34kc_uClibc-0.9.33.2_gluon-ar71xx-generic/usr/lib \
 					-L${GLUON_DIR}/build/ar71xx-generic/openwrt/staging_dir/target-mips_34kc_uClibc-0.9.33.2_gluon-ar71xx-generic/lib \

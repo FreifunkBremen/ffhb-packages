@@ -66,12 +66,26 @@ static int survey_airtime_handler(struct nl_msg *msg, void *arg)
 	if (!sinfo[NL80211_SURVEY_INFO_IN_USE])
 		goto abort;
 
-	result->frequency   = nla_get_u32(sinfo[NL80211_SURVEY_INFO_FREQUENCY]),
-	result->active_time = nla_get_u64(sinfo[NL80211_SURVEY_INFO_CHANNEL_TIME]);
-	result->busy_time   = nla_get_u64(sinfo[NL80211_SURVEY_INFO_CHANNEL_TIME_BUSY]);
-	result->rx_time     = nla_get_u64(sinfo[NL80211_SURVEY_INFO_CHANNEL_TIME_RX]);
-	result->tx_time     = nla_get_u64(sinfo[NL80211_SURVEY_INFO_CHANNEL_TIME_TX]);
-	result->noise       = nla_get_u8(sinfo[NL80211_SURVEY_INFO_NOISE]);
+	uint64_t frequency  = nla_get_u32(sinfo[NL80211_SURVEY_INFO_FREQUENCY]);
+
+	if (frequency != result->frequency) {
+		result->frequency          = frequency;
+		result->active_time.offset = nla_get_u64(sinfo[NL80211_SURVEY_INFO_CHANNEL_TIME]);
+		result->busy_time.offset   = nla_get_u64(sinfo[NL80211_SURVEY_INFO_CHANNEL_TIME_BUSY]);
+		result->rx_time.offset     = nla_get_u64(sinfo[NL80211_SURVEY_INFO_CHANNEL_TIME_RX]);
+		result->tx_time.offset     = nla_get_u64(sinfo[NL80211_SURVEY_INFO_CHANNEL_TIME_TX]);
+		result->active_time.current = 0;
+		result->busy_time.current   = 0;
+		result->rx_time.current     = 0;
+		result->tx_time.current     = 0;
+	} else {
+		result->active_time.current = nla_get_u64(sinfo[NL80211_SURVEY_INFO_CHANNEL_TIME]) - result->active_time.offset;
+		result->busy_time.current   = nla_get_u64(sinfo[NL80211_SURVEY_INFO_CHANNEL_TIME_BUSY]) - result->busy_time.offset;
+		result->rx_time.current     = nla_get_u64(sinfo[NL80211_SURVEY_INFO_CHANNEL_TIME_RX]) - result->rx_time.offset;
+		result->tx_time.current     = nla_get_u64(sinfo[NL80211_SURVEY_INFO_CHANNEL_TIME_TX]) - result->tx_time.offset;
+	}
+
+	result->noise = nla_get_u8(sinfo[NL80211_SURVEY_INFO_NOISE]);
 
 error:
 abort:
@@ -125,13 +139,7 @@ out:
 	return error;
 }
 
-struct airtime *get_airtime(void) {
-	struct airtime *ret = calloc(1, sizeof(*ret));
-	if (!ret)
-		return NULL;
-
+void get_airtime(struct airtime *ret) {
 	get_airtime_for_interface(&ret->radio24, wifi_24_dev);
 	get_airtime_for_interface(&ret->radio5,  wifi_5_dev);
-
-	return ret;
 }

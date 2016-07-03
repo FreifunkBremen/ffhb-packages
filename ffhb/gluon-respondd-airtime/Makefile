@@ -13,13 +13,25 @@ define Package/gluon-respondd-airtime
   SECTION:=gluon
   CATEGORY:=Gluon
   TITLE:=Add airtime to respondd
-  DEPENDS:=+libnl-tiny +respondd
+  DEPENDS:=+respondd +libnl-tiny
+#  DEPENDS:=+respondd +libnl-tiny +libuci
 endef
 
 define Build/Prepare
 	mkdir -p $(PKG_BUILD_DIR)
 	$(CP) ./src/* $(PKG_BUILD_DIR)/
 endef
+
+define Build/Configure
+endef
+
+
+TARGET_CFLAGS += -I$(STAGING_DIR)/usr/include/libnl-tiny
+
+define Build/Compile
+	CFLAGS="$(TARGET_CFLAGS)" CPPFLAGS="$(TARGET_CPPFLAGS)" $(MAKE) -C $(PKG_BUILD_DIR) $(TARGET_CONFIGURE_OPTS)
+endef
+
 
 define Package/gluon-respondd-airtime/install
 	$(INSTALL_DIR) $(1)/lib/gluon/respondd

@@ -7,7 +7,33 @@
 
 #include "airtime.h"
 
-/* FIXME error handling */
+void fill_airtime_json(struct airtime_result air, struct json_object *obj){
+	struct json_object *ret = NULL;
+	ret = json_object_new_int64(air.active_time.current);
+	if(ret)
+		json_object_object_add(obj,"busy_time",ret);
+
+	ret = json_object_new_int64(air.busy_time.current);
+	if(ret)
+		json_object_object_add(obj,"busy_time",ret);
+
+	ret = json_object_new_int64(air.rx_time.current);
+	if(ret)
+		json_object_object_add(obj,"rx_time",ret);
+
+	ret = json_object_new_int64(air.tx_time.current);
+	if(ret)
+		json_object_object_add(obj,"tx_time",ret);
+
+	ret = json_object_new_int(air.noise);
+	if(ret)
+		json_object_object_add(obj,"noise",ret);
+
+	ret = json_object_new_int(air.frequency);
+	if(ret)
+		json_object_object_add(obj,"frequency",ret);
+}
+
 static struct json_object *respondd_provider_statistics(void) {
 	struct airtime *a = NULL;
 	struct json_object *ret = NULL, *wireless = NULL;
@@ -20,24 +46,21 @@ static struct json_object *respondd_provider_statistics(void) {
 	if (!ret)
 		goto end;
 
-	a = get_airtime();
+	a = get_airtime("client0","client1");
 	if (!a)
 		return NULL;
 
-	struct json_object *v;
+	struct json_object *v = NULL;
 
-	if (a->a24 != INVALID_AIRTIME) {
-		v = json_object_new_double(a->a24);
-		if (!v)
-			goto end;
-		json_object_object_add(wireless, "airtime24", v);
-	}
-	if (a->a5 != INVALID_AIRTIME) {
-		v = json_object_new_double(a->a5);
-		if (!v)
-			goto end;
-		json_object_object_add(wireless, "airtime5", v);
-	}
+	fill_airtime_json(a->radio0,v);
+	if (!v)
+		goto end;
+	json_object_object_add(wireless, "airtime24", v);
+
+	fill_airtime_json(a->radio1,v);
+	if (!v)
+		goto end;
+	json_object_object_add(wireless, "airtime5", v);
 
 	json_object_object_add(ret, "wireless", wireless);
 

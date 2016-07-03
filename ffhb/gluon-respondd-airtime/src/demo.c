@@ -2,6 +2,15 @@
 #include <unistd.h> /* sleep */
 
 #include "airtime.h"
+#if GLUON
+static const char const *wifi_0_dev = "client0";
+static const char const *wifi_1_dev = "client1";
+
+#else
+static const char const *wifi_0_dev = "wlan0";
+static const char const *wifi_1_dev = "wlan1";
+
+#endif /* GLUON */
 
 void print_result(struct airtime_result *);
 
@@ -9,9 +18,9 @@ int main() {
 	struct airtime *a;
 
 	while (1) {
-		a = get_airtime();
-		print_result(&a->radio24);
-		print_result(&a->radio5);
+		a = get_airtime(wifi_0_dev,wifi_1_dev);
+		print_result(&a->radio0);
+		print_result(&a->radio1);
 		sleep(1);
 	}
 }

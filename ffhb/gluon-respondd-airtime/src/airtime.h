@@ -17,10 +17,10 @@ struct airtime_result {
 };
 
 struct airtime {
-	struct airtime_result radio24;
-	struct airtime_result radio5;
+	struct airtime_result radio0;
+	struct airtime_result radio1;
 };
 
-struct airtime* get_airtime();
+struct airtime* get_airtime(char *radio0, char *radio1);
 
 #define DEBUG { printf("Reached %s:%d\n", __FILE__, __LINE__); fflush(NULL); }

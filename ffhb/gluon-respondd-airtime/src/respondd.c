@@ -7,31 +7,48 @@
 
 #include "airtime.h"
 
-void fill_airtime_json(struct airtime_result air, struct json_object *obj){
-	struct json_object *ret = NULL;
-	ret = json_object_new_int64(air.active_time.current);
-	if(ret)
-		json_object_object_add(obj,"busy_time",ret);
+void fill_airtime_json(struct airtime_result *air, struct json_object* wireless){
+	struct json_object *ret = NULL, *obj = NULL;
 
-	ret = json_object_new_int64(air.busy_time.current);
-	if(ret)
-		json_object_object_add(obj,"busy_time",ret);
+	obj = json_object_new_object();
+	if(!obj)
+		goto error;
 
-	ret = json_object_new_int64(air.rx_time.current);
-	if(ret)
-		json_object_object_add(obj,"rx_time",ret);
+	ret = json_object_new_int64(air->active_time.current);
+	if(!ret)
+		goto error;
+	json_object_object_add(obj,"active",ret);
 
-	ret = json_object_new_int64(air.tx_time.current);
-	if(ret)
-		json_object_object_add(obj,"tx_time",ret);
+	ret = json_object_new_int64(air->busy_time.current);
+	if(!ret)
+		goto error;
+	json_object_object_add(obj,"busy",ret);
 
-	ret = json_object_new_int(air.noise);
-	if(ret)
-		json_object_object_add(obj,"noise",ret);
+	ret = json_object_new_int64(air->rx_time.current);
+	if(!ret)
+		goto error;
+	json_object_object_add(obj,"rx",ret);
 
-	ret = json_object_new_int(air.frequency);
-	if(ret)
-		json_object_object_add(obj,"frequency",ret);
+	ret = json_object_new_int64(air->tx_time.current);
+	if(!ret)
+		goto error;
+	json_object_object_add(obj,"tx",ret);
+
+	ret = json_object_new_int(air->noise);
+	if(!ret)
+		goto error;
+	json_object_object_add(obj,"noise",ret);
+
+	ret = json_object_new_int(air->frequency);
+	if(!ret)
+		goto error;
+	json_object_object_add(obj,"frequency",ret);
+
+error:
+	if(air->frequency >= 2400  && air->frequency < 2500)
+		json_object_object_add(wireless, "airtime24", obj);
+	else if (air->frequency >= 5000 && air->frequency < 6000)
+		json_object_object_add(wireless, "airtime5", obj);
 }
 
 static struct json_object *respondd_provider_statistics(void) {
@@ -40,32 +57,27 @@ static struct json_object *respondd_provider_statistics(void) {
 
 	wireless = json_object_new_object();
 	if (!wireless)
-		goto end;
+		return NULL;
 
 	ret = json_object_new_object();
 	if (!ret)
-		goto end;
+		return NULL;
 
 	a = get_airtime("client0","client1");
 	if (!a)
-		return NULL;
-
-	struct json_object *v = NULL;
-
-	fill_airtime_json(a->radio0,v);
-	if (!v)
 		goto end;
-	json_object_object_add(wireless, "airtime24", v);
 
-	fill_airtime_json(a->radio1,v);
-	if (!v)
+
+	if (!a->radio0.frequency)
 		goto end;
-	json_object_object_add(wireless, "airtime5", v);
+	fill_airtime_json(&a->radio0,wireless);
 
-	json_object_object_add(ret, "wireless", wireless);
+	if (!a->radio1.frequency)
+		goto end;
+	fill_airtime_json(&a->radio1,wireless);
 
 end:
-	free(a);
+	json_object_object_add(ret, "wireless", wireless);
 	return ret;
 }
 

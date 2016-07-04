@@ -16,7 +16,7 @@ demo:	demo.c airtime.c airtime.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -fPIC -D_GNU_SOURCE -lnl-tiny -o $@ airtime.c demo.c $(LDLIBS)
 
 respondd.so: respondd.c airtime.c
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -shared -fPIC -D_GNU_SOURCE -lnl-tiny -o $@ airtime.c respondd.c $(LDLIBS)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -shared -fPIC -D_GNU_SOURCE -DGLUON -lnl-tiny -o $@ airtime.c respondd.c $(LDLIBS)
 
 clean:
 	rm -rf *.so demo

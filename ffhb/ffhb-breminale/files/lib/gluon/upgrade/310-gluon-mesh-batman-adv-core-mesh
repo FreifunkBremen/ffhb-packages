@@ -1,0 +1,42 @@
+#!/usr/bin/lua
+
+local sysconfig = require 'gluon.sysconfig'
+local sysctl = require 'gluon.sysctl'
+local site = require 'gluon.site_config'
+local uci = require('luci.model.uci').cursor()
+
+
+if not uci:get('network', 'client') then
+  uci:section('network', 'interface', 'client',
+	      {
+		ifname = sysconfig.lan_ifname,
+		type = 'bridge',
+		proto = 'dhcpv6',
+		reqprefix = 'no',
+	      }
+  )
+end
+
+uci:set('network', 'client', 'igmp_snooping', 0)
+uci:set('network', 'client', 'macaddr', sysconfig.primary_mac)
+uci:set('network', 'client', 'peerdns', 1)
+
+uci:save('network')
+uci:commit('network')
+
+
+uci:delete('firewall', 'client')
+uci:section('firewall', 'zone', 'client',
+	    {
+		    name = 'client',
+		    network = {'client'},
+		    input = 'REJECT',
+		    output = 'ACCEPT',
+		    forward = 'REJECT',
+	    }
+)
+
+uci:save('firewall')
+uci:commit('firewall')
+
+sysctl.set('net.ipv6.conf.br-client.forwarding', 0)

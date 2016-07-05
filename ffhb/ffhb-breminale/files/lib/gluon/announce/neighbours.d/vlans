@@ -1,0 +1,52 @@
+local switch = require 'gluon.switch'
+local neighbours = {}
+
+local function DEC_HEX(IN)
+    local B,K,OUT,I,D=16,"0123456789abcdef","",0
+    while IN>0 do
+        I=I+1
+        IN,D=math.floor(IN/B),math.mod(IN,B)+1
+        OUT=string.sub(K,D,D)..OUT
+    end
+    return OUT
+end
+
+local function split_part(str)
+    if #str == 0 then
+        return {"00", "00"}
+    elseif #str == 1 then
+        return {"00", "0" .. str}
+    elseif #str == 2 then
+        return {"00", str}
+    elseif #str == 3 then
+        return {"0" .. str:sub(1, 1), str:sub(2)}
+    elseif #str == 4 then
+        return {str:sub(1, 2), str:sub(3)}
+    end
+end
+
+local function get_port_neighbours(port, tq)
+    local port_neighbours = {}
+    for _, line in ipairs(util.split(util.exec("/usr/bin/ping6 -L -w 1 -I eth0.1" .. port .. " ff02:0:0:0:0:0:2:1001|awk '/ bytes from / {print $4}'|sort -u"))) do
+        for m1, m2, m3, m4 in line:gmatch("fe80::([a-f0-9]*):([a-f0-9]*)ff:fe([a-f0-9]*):([a-f0-9]*):") do
+            local foo = {split_part(m1), split_part(m2), split_part(m3), split_part(m4)}
+            local mac = DEC_HEX(tonumber(foo[1][1], 16) - 2) .. ":" .. foo[1][2] .. ":" .. foo[2][2] .. ":" .. foo[3][2] .. ":" .. foo[4][1] .. ":" .. foo[4][2]
+            port_neighbours[mac] = { tq = tq, lastseen = 0, port = port }
+        end
+    end
+    return port_neighbours
+end
+
+local switchdata = switch.get_data()
+for _,port in ipairs({2,3,4,5}) do
+    if switchdata["port" .. port].link == "up" then
+        local tq = 255
+        if switchdata["port" .. port].speed == "100baseT" then
+            tq = 127
+        end
+        for mac,neighbour in pairs(get_port_neighbours(port, tq)) do
+            neighbours[mac] = neighbour
+        end
+    end
+end
+return neighbours

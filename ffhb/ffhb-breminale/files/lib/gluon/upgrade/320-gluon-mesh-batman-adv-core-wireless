@@ -1,0 +1,82 @@
+#!/usr/bin/lua
+
+local site = require 'gluon.site_config'
+local util = require 'gluon.util'
+
+local uci = require('luci.model.uci').cursor()
+
+
+local function configure_radio(radio, index, config)
+  uci:delete('wireless', radio, 'disabled')
+
+  uci:set('wireless', radio, 'channel', config.channel)
+  uci:set('wireless', radio, 'htmode', config.htmode)
+  uci:set('wireless', radio, 'country', site.regdom)
+
+  local client = 'client_' .. radio
+
+  local disable_state_client = false
+
+  if uci:get('wireless', client) then
+    disable_state_client = uci:get_bool('wireless', client, "disabled")
+  elseif config.client_disabled then
+    disable_state_client = true
+  end
+
+  local client_ifname
+  local radio_suffix = radio:match('^radio(%d+)$')
+  if radio_suffix then
+    client_ifname = 'client' .. radio_suffix
+  end
+
+  uci:delete('wireless', client)
+  uci:section('wireless', 'wifi-iface', client,
+	      {
+		device = radio,
+		network = 'client',
+		mode = 'ap',
+		ssid = config.ssid,
+		macaddr = util.generate_mac(2, index),
+		ifname = client_ifname,
+		disabled = disable_state_client and 1 or 0,
+	      }
+  )
+
+  uci:delete('wireless', 'mgmt_' .. radio)
+  uci:section('wireless', 'wifi-iface', 'mgmt_' .. radio, {
+      device = radio,
+      network = 'wan',
+      mode = 'ap',
+      ssid = 'mgmt.ffhb.de',
+      macaddr = util.generate_mac(4, index),
+      ifname = 'mgmt' .. radio_suffix,
+      disabled = 0,
+      encryption = 'psk2',
+      key = '73t-m3-1n',
+  })
+end
+
+
+local radios = {}
+
+uci:foreach('wireless', 'wifi-device',
+	    function(s)
+	      table.insert(radios, s['.name'])
+	    end
+)
+
+for index, radio in ipairs(radios) do
+	local hwmode = uci:get('wireless', radio, 'hwmode')
+
+	if hwmode == '11g' or hwmode == '11ng' then
+	  configure_radio(radio, index, site.wifi24)
+	elseif hwmode == '11a' or hwmode == '11na' then
+	  configure_radio(radio, index, site.wifi5)
+	end
+end
+
+
+uci:save('wireless')
+uci:save('network')
+uci:commit('wireless')
+uci:commit('network')

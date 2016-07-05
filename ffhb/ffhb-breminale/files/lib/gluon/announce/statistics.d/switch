@@ -1,2 +1,0 @@
-local switch = require 'gluon.switch'
-return switch.get_data()

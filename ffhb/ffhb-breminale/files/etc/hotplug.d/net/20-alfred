@@ -1,5 +1,0 @@
-#!/bin/sh
-
-if [ "$ACTION" = "add" -a "$DEVICENAME" = "br-client" ]; then
-  /etc/init.d/alfred restart
-fi

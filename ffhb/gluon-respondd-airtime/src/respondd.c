@@ -35,7 +35,7 @@ void fill_airtime_json(struct airtime_result *air, struct json_object* wireless)
 	JSON_ADD_INT64(air->rx_time.current,"rx")
 	JSON_ADD_INT64(air->tx_time.current,"tx")
 
-	ret = json_object_new_int(value);
+	ret = json_object_new_int(air->noise);
 	json_object_object_add(obj,"noise",ret);
 
 error:

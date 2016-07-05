@@ -24,15 +24,19 @@ void fill_airtime_json(struct airtime_result *air, struct json_object* wireless)
 	obj = json_object_new_object();
 	if(!obj)
 		goto error;
-#define JSON_ADD_INT64(value,key) {ret = json_object_new_int64(value); if(!ret) goto error; json_object_object_add(obj,key,ret);}
-#define JSON_ADD_INT(value,key) {ret = json_object_new_int(value); if(!ret) goto error; json_object_object_add(obj,key,ret);}
+#define JSON_ADD_INT64(value,key) {ret = json_object_new_int64(value); json_object_object_add(obj,key,ret);}
+	ret = json_object_new_int(air->frequency);
+	if(!ret)
+		goto error;
+	json_object_object_add(obj,"frequency",ret);
+
 	JSON_ADD_INT64(air->active_time.current,"active")
 	JSON_ADD_INT64(air->busy_time.current,"busy")
 	JSON_ADD_INT64(air->rx_time.current,"rx")
 	JSON_ADD_INT64(air->tx_time.current,"tx")
 
-	JSON_ADD_INT(air->noise,"noise")
-	JSON_ADD_INT(air->frequency,"frequency")
+	ret = json_object_new_int(value);
+	json_object_object_add(obj,"noise",ret);
 
 error:
 	if(air->frequency >= 2400  && air->frequency < 2500)

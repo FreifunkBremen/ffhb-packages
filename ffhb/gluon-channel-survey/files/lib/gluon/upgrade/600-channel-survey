@@ -1,9 +1,0 @@
-#!/usr/bin/lua
-
-local minute = math.random(0, 59)
-
--- Scan hourly at a random time
-local f = io.open('/lib/gluon/cron/channel-survey', 'w')
-f:write(string.format('%i * * * * /usr/sbin/channel-survey > /tmp/gluon/channel-survey.cache\n', minute))
-f:write('*/10 * * * * gzip < /tmp/gluon/channel-survey.cache | alfred -s 190')
-f:close()

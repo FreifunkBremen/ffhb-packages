@@ -6,7 +6,7 @@ local util = require 'gluon.util'
 local uci = require('luci.model.uci').cursor()
 
 
-local function configure_radio(radio, index, config)
+local function configure_radio(radio, index, config, band)
   uci:delete('wireless', radio, 'disabled')
 
   uci:set('wireless', radio, 'channel', config.channel)
@@ -43,17 +43,33 @@ local function configure_radio(radio, index, config)
   )
 
   uci:delete('wireless', 'mgmt_' .. radio)
-  uci:section('wireless', 'wifi-iface', 'mgmt_' .. radio, {
-      device = radio,
-      network = 'wan',
-      mode = 'ap',
-      ssid = 'mgmt.ffhb.de',
-      macaddr = util.generate_mac(4, index),
-      ifname = 'mgmt' .. radio_suffix,
-      disabled = 0,
-      encryption = 'psk2',
-      key = '73t-m3-1n',
-  })
+  uci:delete('wireless', 'priv_' .. radio)
+  if band == 5 then
+      uci:section('wireless', 'wifi-iface', 'mgmt_' .. radio, {
+          device = radio,
+          network = 'wan',
+          mode = 'ap',
+          ssid = 'mgmt.ffhb.de',
+          macaddr = util.generate_mac(4, index),
+          ifname = 'mgmt' .. radio_suffix,
+          disabled = 0,
+          hidden = 1,
+          encryption = 'psk2',
+          key = '73t-m3-1n',
+      })
+      uci:section('wireless', 'wifi-iface', 'priv_' .. radio, {
+          device = radio,
+          network = 'wan',
+          mode = 'ap',
+          ssid = '' .. gluon.util.node_id(),
+          macaddr = util.generate_mac(8, index),
+          ifname = 'priv' .. radio_suffix,
+          disabled = 1,
+          hidden = 0,
+          encryption = 'psk2',
+          key = '73t-m3-1n',
+      })
+  end
 end
 
 
@@ -69,9 +85,9 @@ for index, radio in ipairs(radios) do
 	local hwmode = uci:get('wireless', radio, 'hwmode')
 
 	if hwmode == '11g' or hwmode == '11ng' then
-	  configure_radio(radio, index, site.wifi24)
+	  configure_radio(radio, index, site.wifi24, 2)
 	elseif hwmode == '11a' or hwmode == '11na' then
-	  configure_radio(radio, index, site.wifi5)
+	  configure_radio(radio, index, site.wifi5, 5)
 	end
 end
 

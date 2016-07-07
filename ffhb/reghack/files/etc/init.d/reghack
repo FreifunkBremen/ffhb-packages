@@ -1,0 +1,20 @@
+#!/bin/sh /etc/rc.common
+
+START=05
+
+boot() {
+    # copied from /etc/init.d/boot
+    [ -f /proc/mounts ] || /sbin/mount_root
+    [ -f /proc/jffs2_bbc ] && echo "S" > /proc/jffs2_bbc
+
+    grep -i -q mips /proc/cpuinfo && REGHACK=reghack.mips.elf
+    grep -i -q freescale /proc/cpuinfo && REGHACK=reghack.ppc.elf
+
+    # Install regdomain hack
+    if [ ! -f /etc/.regd ]; then
+        cd /lib/wifi
+        ./$REGHACK /lib/modules/*/ath.ko
+        ./$REGHACK /lib/modules/*/cfg80211.ko
+        touch /etc/.regd
+    fi
+}

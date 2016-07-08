@@ -66,7 +66,7 @@ uci:save('firewall')
 uci:commit('firewall')
 
 local function set_remote_logging(zone)
-    uci:set('firewall', zone['.name'], 'log_ip', '10.1.1.1')
+    uci:set('system', zone['.name'], 'log_ip', '10.1.1.1')
 end
 uci:foreach('system', 'system', set_remote_logging)
 uci:save('system')

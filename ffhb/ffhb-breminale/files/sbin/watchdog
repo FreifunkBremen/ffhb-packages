@@ -1,0 +1,45 @@
+#!/usr/bin/lua
+-- Enables or disables SSIDs depending on
+-- whether the gateway is reachable
+
+uci = require("uci").cursor()
+
+gateway   = "fe80::1%br-wan"
+ssid      = "bremen.freifunk.net"
+attempts  = 3
+
+function run()
+
+  local reachable = false
+  local enabled   = uci:get("wireless", "client_radio0", "disabled") ~= "1"
+
+  -- Test reachability
+  for i=1, attempts, 1 do
+    if os.execute("ping6 -n -c 1 "..gateway) == 0 then
+      reachable = true
+      print("reachable")
+      break
+    end
+  end
+
+  if reachable ~= enabled then
+    print("state changed")
+
+    uci:foreach("wireless", "wifi-iface",
+      function(s)
+        -- wifi-iface without encryption?
+        if not s['encryption'] then
+          uci:set("wireless", s['.name'], "disabled", reachable and '0' or '1')
+        end
+    end)
+
+    uci:commit("wireless")
+    os.execute("wifi")
+  end
+
+end
+
+while true do
+  run()
+  os.execute("sleep 60")
+end

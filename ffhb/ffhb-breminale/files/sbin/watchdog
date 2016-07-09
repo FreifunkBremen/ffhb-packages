@@ -33,7 +33,7 @@ function run()
         end
     end)
 
-    uci:commit("wireless")
+    uci:save("wireless")
     os.execute("wifi")
   end
 

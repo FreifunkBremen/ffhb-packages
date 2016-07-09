@@ -67,13 +67,13 @@ static struct json_object *respondd_provider_nodeinfo(void) {
 				if (!v)
 					goto end;
 				if (tmp >= 1 && tmp <= 14){
-					json_object_object_add(wireless, "channel2", v);
+					json_object_object_add(wireless, "channel24", v);
 					tmp = parse_option(uci_lookup_option_string(ctx, s, "txpower"), INVALID_TXPOWER);
 					if (tmp != INVALID_TXPOWER) {
 						v = json_object_new_int64(tmp);
 						if (!v)
 							goto end;
-						json_object_object_add(wireless, "txpower2", v);
+						json_object_object_add(wireless, "txpower24", v);
 					}
 				// FIXME lowes is 7, but i was able to differ between 2.4 Ghz and 5 Ghz by iwinfo_ops->frequency
 				// In EU and US it is 36, so it would be okay for the moment (https://en.wikipedia.org/wiki/List_of_WLAN_channels)

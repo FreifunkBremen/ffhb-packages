@@ -12,6 +12,7 @@ local function configure_radio(radio, index, config, band)
   uci:set('wireless', radio, 'channel', config.channel)
   uci:set('wireless', radio, 'htmode', config.htmode)
   uci:set('wireless', radio, 'country', site.regdom)
+  uci:set('wireless', radio, 'txpower', 0)
   if band == 2 then
     uci:set('wireless', radio, 'supported_rates', '6000 9000 12000 18000 24000 36000 48000 54000')
     uci:set('wireless', radio, 'basic_rate', '6000 9000 18000 36000 54000')
@@ -34,17 +35,17 @@ local function configure_radio(radio, index, config, band)
   end
 
   uci:delete('wireless', client)
-  uci:section('wireless', 'wifi-iface', client,
-	      {
-		device = radio,
-		network = 'client',
-		mode = 'ap',
-		ssid = config.ssid,
-		macaddr = util.generate_mac(2, index),
-		ifname = client_ifname,
-		disabled = disable_state_client and 1 or 0,
-	      }
-  )
+  uci:section('wireless', 'wifi-iface', client, {
+    device = radio,
+    network = 'client',
+    mode = 'ap',
+    ssid = config.ssid,
+    macaddr = util.generate_mac(2, index),
+    ifname = client_ifname,
+    isolate = 1,
+    maxassoc = 60,
+    disabled = disable_state_client and 1 or 0,
+  })
 
   uci:delete('wireless', 'mgmt_' .. radio)
   uci:delete('wireless', 'priv_' .. radio)

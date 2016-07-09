@@ -1,0 +1,8 @@
+#!/bin/sh
+
+local sysconfig = require 'gluon.sysconfig'
+
+local uci = require('luci.model.uci').cursor()
+
+uci:set_list('lldpd', 'config', 'interface', {'wan', sysconfig.wan_ifname})
+uci:save('lldpd')

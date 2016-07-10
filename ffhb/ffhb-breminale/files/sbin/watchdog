@@ -2,13 +2,12 @@
 -- Enables or disables SSIDs depending on
 -- whether the gateway is reachable
 
-uci = require("uci").cursor()
-
 gateway   = "fe80::1%br-wan"
 ssid      = "bremen.freifunk.net"
 attempts  = 3
 
 function run()
+  uci = require("uci").cursor()
 
   local reachable = false
   local enabled   = uci:get("wireless", "client_radio0", "disabled") ~= "1"
@@ -32,6 +31,8 @@ function run()
           uci:set("wireless", s['.name'], "disabled", reachable and '0' or '1')
         end
     end)
+
+    uci:set("wireless", "priv_radio1", "disabled", reachable and '1' or '0')
 
     uci:save("wireless")
     os.execute("wifi")

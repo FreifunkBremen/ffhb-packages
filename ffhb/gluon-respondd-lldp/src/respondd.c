@@ -40,6 +40,8 @@ static struct json_object * respondd_provider_neighbours(void) {
         json_object_object_add(ret_lldp, portmac, neighbors_obj);
     }
 
+    lldpctl_release(conn);
+
     ret = json_object_new_object();
     json_object_object_add(ret, "lldp", ret_lldp);
     return ret;

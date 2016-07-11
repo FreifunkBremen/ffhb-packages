@@ -1,8 +1,7 @@
-#!/bin/sh
-
-local sysconfig = require 'gluon.sysconfig'
+#!/usr/bin/lua
 
 local uci = require('luci.model.uci').cursor()
+uci = require('uci').cursor()
 
-uci:set_list('lldpd', 'config', 'interface', {'eth0.2'})
+uci:set('lldpd', 'config', 'interface', 'eth0')
 uci:save('lldpd')

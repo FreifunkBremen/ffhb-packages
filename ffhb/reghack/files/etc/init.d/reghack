@@ -7,8 +7,7 @@ boot() {
     [ -f /proc/mounts ] || /sbin/mount_root
     [ -f /proc/jffs2_bbc ] && echo "S" > /proc/jffs2_bbc
 
-    grep -i -q mips /proc/cpuinfo && REGHACK=reghack.mips.elf
-    grep -i -q freescale /proc/cpuinfo && REGHACK=reghack.ppc.elf
+    grep -i -q mips /proc/cpuinfo && /lib/wifi/REGHACK=reghack.mips.elf
 
     # Install regdomain hack
     if [ ! -f /etc/.regd ]; then

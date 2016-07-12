@@ -136,6 +136,6 @@ static struct json_object * respondd_provider_clients(void) {
 }
 
 const struct respondd_provider_info respondd_providers[] = {
-	{"clients", respondd_provider_clients},
+	{"statistics", respondd_provider_clients},
 	{}
 };

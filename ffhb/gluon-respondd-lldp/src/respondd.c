@@ -6,8 +6,8 @@
 static struct json_object * respondd_provider_neighbours(void) {
     lldpctl_conn_t *conn;
     lldpctl_atom_t *ifaces, *iface, *port, *neighbors, *neighbor;
-    const char *neighmac, *portmac;
-    struct json_object *ret, *ret_lldp, *neighbors_obj;
+    const char *neighmac, *portmac, *sysname, *sysdescr;
+    struct json_object *ret, *ret_lldp, *neighbors_obj, *neighbor_obj;
 
 
     conn = lldpctl_new(NULL, NULL, NULL);
@@ -38,7 +38,16 @@ static struct json_object * respondd_provider_neighbours(void) {
             if (!neighmac)
                 continue;
 
-            json_object_object_add(neighbors_obj, neighmac, json_object_new_object());
+            neighbor_obj = json_object_new_object();
+            sysname  = lldpctl_atom_get_str(neighbor, lldpctl_k_chassis_name);
+            sysdescr = lldpctl_atom_get_str(neighbor, lldpctl_k_chassis_descr);
+
+            if (sysname)
+                json_object_object_add(neighbor_obj, "name", json_object_new_string(sysname));
+            if (sysdescr)
+                json_object_object_add(neighbor_obj, "descr", json_object_new_string(sysdescr));
+
+            json_object_object_add(neighbors_obj, neighmac, neighbor_obj);
         }
         json_object_object_add(ret_lldp, portmac, neighbors_obj);
     }

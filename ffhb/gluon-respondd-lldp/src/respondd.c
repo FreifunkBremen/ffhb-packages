@@ -6,14 +6,17 @@
 static struct json_object * respondd_provider_neighbours(void) {
     lldpctl_conn_t *conn;
     lldpctl_atom_t *ifaces, *iface, *port, *neighbors, *neighbor;
-    const char *ctlname, *neighmac, *portmac;
+    const char *neighmac, *portmac;
     struct json_object *ret, *ret_lldp, *neighbors_obj;
 
-    ret_lldp = json_object_new_object();
 
-    ctlname = lldpctl_get_default_transport();
-    conn    = lldpctl_new_name(ctlname, NULL, NULL, NULL);
-    ifaces  = lldpctl_get_interfaces(conn);
+    conn = lldpctl_new(NULL, NULL, NULL);
+
+    if(!conn)
+        return NULL;
+
+    ifaces   = lldpctl_get_interfaces(conn);
+    ret_lldp = json_object_new_object();
     lldpctl_atom_foreach(ifaces, iface) {
         port = lldpctl_get_port(iface);
         // check if Port ID Subtype is MAC address

@@ -97,10 +97,6 @@ static void count_stations(size_t *wifi24, size_t *wifi5) {
 		if (strcmp(s->type, "wifi-iface"))
 			continue;
 
-		const char *network = uci_lookup_option_string(ctx, s, "network");
-		if (!network || strcmp(network, "client"))
-			continue;
-
 		const char *mode = uci_lookup_option_string(ctx, s, "mode");
 		if (!mode || strcmp(mode, "ap"))
 			continue;

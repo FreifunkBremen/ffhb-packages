@@ -51,21 +51,17 @@ static int survey_airtime_handler(struct nl_msg *msg, void *arg)
 
 	result = (struct airtime_result *) arg;
 
-	gnlh = nlmsg_data(nlmsg_hdr(msg));
-	if (!gnlh)
-		goto error;
+#define CHECK(x) { if (!(x)) goto abort; }
 
-	nla_parse(tb, NL80211_ATTR_MAX, genlmsg_attrdata(gnlh, 0),genlmsg_attrlen(gnlh, 0), NULL);
-
-	if (!tb[NL80211_ATTR_SURVEY_INFO])
-		goto abort;
-
-	if (nla_parse_nested(sinfo, NL80211_SURVEY_INFO_MAX, tb[NL80211_ATTR_SURVEY_INFO], survey_policy))
-		goto abort;
+	CHECK(!(gnlh = nlmsg_data(nlmsg_hdr(msg))));
+	CHECK(nla_parse(tb, NL80211_ATTR_MAX, genlmsg_attrdata(gnlh, 0),genlmsg_attrlen(gnlh, 0), NULL));
+	CHECK(!tb[NL80211_ATTR_SURVEY_INFO]);
+	CHECK(nla_parse_nested(sinfo, NL80211_SURVEY_INFO_MAX, tb[NL80211_ATTR_SURVEY_INFO], survey_policy));
 
 	// Channel inactive?
-	if (!sinfo[NL80211_SURVEY_INFO_IN_USE])
-		goto abort;
+	CHECK(!sinfo[NL80211_SURVEY_INFO_IN_USE]);
+
+#undef CHECK
 
 	uint64_t frequency  = nla_get_u32(sinfo[NL80211_SURVEY_INFO_FREQUENCY]);
 
@@ -88,7 +84,6 @@ static int survey_airtime_handler(struct nl_msg *msg, void *arg)
 
 	result->noise = nla_get_u8(sinfo[NL80211_SURVEY_INFO_NOISE]);
 
-error:
 abort:
 	return NL_SKIP;
 }
@@ -140,7 +135,7 @@ out:
 	return error;
 }
 
-struct airtime* get_airtime(char *wifi_0_dev,char *wifi_1_dev) {
+struct airtime* get_airtime(const char *wifi_0_dev, const char *wifi_1_dev) {
 	get_airtime_for_interface(&cur_airtime.radio0, wifi_0_dev);
 	get_airtime_for_interface(&cur_airtime.radio1, wifi_1_dev);
 

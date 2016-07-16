@@ -21,6 +21,6 @@ struct airtime {
 	struct airtime_result radio1;
 };
 
-struct airtime* get_airtime(char *radio0, char *radio1);
+struct airtime* get_airtime(const char *radio0, const char *radio1);
 
 #define DEBUG { printf("Reached %s:%d\n", __FILE__, __LINE__); fflush(NULL); }

@@ -1,16 +1,47 @@
 #!/usr/bin/lua
 
 local uci = require('luci.model.uci').cursor()
+local model = require('platform_info').get_model()
+local models = {}
+
+models["TP-Link TL-WDR3600 v1"] = function()
+  -- Switch Ports:
+  -- 0 CPU
+  -- 1 WAN
+  -- 2 LAN1
+  -- 3 LAN2
+  -- 4 LAN3
+  -- 5 LAN4
+  -- 6 unknown
+  uci:set('network', 'client', 'ifname', 'eth0.3')
+end
+
+models["TP-Link Archer C7 v2"] = function()
+  -- Switch Ports:
+  -- 0 eth1
+  -- 1 WAN
+  -- 2 LAN1
+  -- 3 LAN2
+  -- 4 LAN3
+  -- 5 LAN4
+  -- 6 eth0
+  uci:set('network', 'client', 'ifname', 'eth1.3')
+end
+
+
+local action = models[model]
+if not action then
+  print("unsupported model: '" .. model .. "'")
+  os.exit(1)
+end
 
 uci:delete_all('network', 'switch_vlan')
-
--- Client VLAN=3
-uci:set('network', 'client', 'ifname', 'eth0.3')
+action()
 
 -- Native VLAN
 uci:section('network', 'switch_vlan', 'vlan_1', {
     vlan = 1,
-    ports = '0t 1 2 3 4 5',
+    ports = '0 1 2 3 4 5 6',
     device = 'switch0',
 })
 
@@ -31,6 +62,5 @@ for i=0, 6, 1 do
         port = i,
     })
 end
-
 
 uci:save('network')

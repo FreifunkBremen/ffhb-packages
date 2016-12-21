@@ -1,20 +1,21 @@
 include $(TOPDIR)/rules.mk
 
-PKG_NAME:=gluon-respondd-airtime
+PKG_NAME:=respondd-module-airtime
 PKG_VERSION:=1
 PKG_RELEASE:=1
+
+PKG_LICENSE:=BSD-2-Clause
 
 PKG_BUILD_DIR := $(BUILD_DIR)/$(PKG_NAME)
 PKG_BUILD_DEPENDS := respondd
 
-include $(GLUONDIR)/include/package.mk
+include $(INCLUDE_DIR)/package.mk
 
-define Package/gluon-respondd-airtime
-  SECTION:=gluon
-  CATEGORY:=Gluon
+define Package/respondd-module-airtime
+  SECTION:=net
+  CATEGORY:=Network
   TITLE:=Add airtime to respondd
   DEPENDS:=+respondd +libnl-tiny
-#  DEPENDS:=+respondd +libnl-tiny +libuci
 endef
 
 define Build/Prepare
@@ -33,9 +34,9 @@ define Build/Compile
 endef
 
 
-define Package/gluon-respondd-airtime/install
-	$(INSTALL_DIR) $(1)/lib/gluon/respondd
-	$(CP) $(PKG_BUILD_DIR)/respondd.so $(1)/lib/gluon/respondd/airtime.so
+define Package/respondd-module-airtime/install
+	$(INSTALL_DIR) $(1)/lib/respondd
+	$(CP) $(PKG_BUILD_DIR)/respondd.so $(1)/lib/respondd/airtime.so
 endef
 
-$(eval $(call BuildPackage,gluon-respondd-airtime))
+$(eval $(call BuildPackage,respondd-module-airtime))

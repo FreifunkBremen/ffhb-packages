@@ -12,7 +12,7 @@ define Package/gluon-channel-switcher
   SECTION:=gluon
   CATEGORY:=Gluon
   TITLE:=Switch channel after specified deadline or when nearby nodes already switched
-  DEPENDS:=+gluon-cron +libiwinfo-lua
+  DEPENDS:=+micrond +libiwinfo-lua
 endef
 
 define Package/gluon-channel-switcher/description

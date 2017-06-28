@@ -1,0 +1,15 @@
+#!/usr/bin/lua
+
+local sysconfig = require 'gluon.sysconfig'
+
+local uci = require('luci.model.uci').cursor()
+local lutil = require 'luci.util'
+
+if not uci:get('network', 'client', 'ifname') then
+  if sysconfig.lan_ifname then
+    for _, lanif in ipairs(lutil.split(sysconfig.lan_ifname, ' ')) do
+      uci:add_to_set('network', 'client', 'ifname', lanif)
+      uci:save('network')
+    end
+  end
+end

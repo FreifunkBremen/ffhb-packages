@@ -1,0 +1,7 @@
+#!/usr/bin/lua
+
+local uci = require('luci.model.uci').cursor()
+uci = require('uci').cursor()
+
+uci:set('lldpd', 'config', 'interface', 'eth0')
+uci:save('lldpd')

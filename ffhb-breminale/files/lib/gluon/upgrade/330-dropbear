@@ -1,0 +1,5 @@
+#!/usr/bin/sh
+
+uci set dropbear.@dropbear[0].PasswordAuth=off
+uci set dropbear.@dropbear[0].RootPasswordAuth=off
+uci commit dropbear

@@ -1,0 +1,43 @@
+#!/usr/bin/lua
+
+local uci = require('luci.model.uci').cursor()
+local util = require 'gluon.util'
+
+uci:set('network', 'wan', 'peerdns', 1)
+uci:save('network')
+
+uci:set('alfred', 'alfred', 'start_vis', '0')
+uci:delete('alfred', 'alfred', 'batmanif')
+uci:save('alfred')
+
+local function accept_input_on_wan(zone)
+    if zone.name == 'wan' then
+        uci:set('firewall', zone['.name'], 'input', 'ACCEPT')
+        uci:set('firewall', zone['.name'], 'conntrack', '0')
+    end
+
+    return true
+end
+uci:foreach('firewall', 'zone', accept_input_on_wan)
+local function accept_icmpv6_on_client(rule)
+    if rule.name == 'Allow-ICMPv6-Input' then
+        uci:set('firewall', rule['.name'], 'src', 'client')
+    end
+
+    return true
+end
+uci:foreach('firewall', 'rule', accept_icmpv6_on_client)
+uci:section('firewall', 'rule', 'client_alfred', {
+    name = 'client_alfred',
+    src = 'client',
+    dest_port = '16962',
+    proto = 'udp',
+    target = 'ACCEPT',
+})
+uci:save('firewall')
+
+local function set_remote_logging(zone)
+    uci:set('system', zone['.name'], 'log_ip', '10.1.1.1')
+end
+uci:foreach('system', 'system', set_remote_logging)
+uci:save('system')

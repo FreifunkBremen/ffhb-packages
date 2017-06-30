@@ -6,9 +6,6 @@ local util = require 'gluon.util'
 uci:set('network', 'wan', 'peerdns', 1)
 uci:save('network')
 
-uci:set('alfred', 'alfred', 'start_vis', '0')
-uci:delete('alfred', 'alfred', 'batmanif')
-uci:save('alfred')
 
 local function accept_input_on_wan(zone)
     if zone.name == 'wan' then

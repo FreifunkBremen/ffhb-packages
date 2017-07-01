@@ -11,13 +11,11 @@ local function configure_mgmt(radio, index, suffix)
       device = radio,
       network = 'client',
       mode = 'ap',
-      ssid = '' .. gluon.util.node_id(),
+      ssid = 'offline-' .. gluon.util.node_id(),
       macaddr = util.generate_mac(7, index-1),
       ifname = 'priv' .. suffix,
       disabled = 1,
       hidden = 0,
-      encryption = 'psk2',
-      key = 'himmlisch',
   })
 end
 

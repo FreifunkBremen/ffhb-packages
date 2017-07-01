@@ -2,7 +2,7 @@
 -- Enables or disables SSIDs depending on
 -- whether the gateway is reachable
 
-gateway   = "fe80::1%br-wan"
+gateway   = "fe80::66d1:54ff:fec2:4a02%br-client"
 ssid      = "bremen.freifunk.net"
 attempts  = 3
 interval  = 60
@@ -27,7 +27,7 @@ function run()
     uci:foreach("wireless", "wifi-iface",
       function(s)
         -- wifi without encryption or management?
-        if not s['encryption'] or string.match(s['.name'], "^mgmt_") then
+        if string.match(s['.name'], "^client_") then
           uci:set("wireless", s['.name'], "disabled", reachable and '0' or '1')
         end
 

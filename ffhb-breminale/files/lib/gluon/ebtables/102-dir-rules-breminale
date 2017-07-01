@@ -1,4 +1,0 @@
-os.execute("ebtables -D IN_ONLY --logical-in br-client -i ! bat0 -j DROP")
-os.execute("ebtables -D OUT_ONLY --logical-out br-client -o ! bat0 -j DROP")
-rule 'IN_ONLY --logical-in br-client -i ! eth0.3 -j DROP'
-rule 'OUT_ONLY --logical-out br-client -o ! eth0.3 -j DROP'

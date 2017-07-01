@@ -2,27 +2,14 @@
 
 local util = require 'gluon.util'
 
-local uci = require('luci.model.uci').cursor()
+local uci = require('simple-uci').cursor()
 
 local function configure_mgmt(radio, index, suffix)
-  uci:delete('wireless', 'mgmt_' .. radio)
-  uci:section('wireless', 'wifi-iface', 'mgmt_' .. radio, {
-      device = radio,
-      network = 'wan',
-      mode = 'ap',
-      ssid = 'mgmt.ffhb.de',
-      macaddr = util.generate_mac(6, index-1),
-      ifname = 'mgmt' .. suffix,
-      disabled = 0,
-      hidden = 1,
-      encryption = 'psk2',
-      key = '73t-m3-1n',
-  })
 
   uci:delete('wireless', 'priv_' .. radio)
   uci:section('wireless', 'wifi-iface', 'priv_' .. radio, {
       device = radio,
-      network = 'wan',
+      network = 'client',
       mode = 'ap',
       ssid = '' .. gluon.util.node_id(),
       macaddr = util.generate_mac(7, index-1),
@@ -30,7 +17,7 @@ local function configure_mgmt(radio, index, suffix)
       disabled = 1,
       hidden = 0,
       encryption = 'psk2',
-      key = '73t-m3-1n',
+      key = 'himmlisch',
   })
 end
 
@@ -42,6 +29,6 @@ local function configure_radio(radio, index, _)
   end
 end
 
-util.iterate_radios(configure_radio)
+util.iterate_radios(uci, configure_radio)
 
 uci:save('wireless')

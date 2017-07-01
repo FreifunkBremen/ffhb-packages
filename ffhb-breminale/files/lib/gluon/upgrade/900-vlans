@@ -1,6 +1,6 @@
 #!/usr/bin/lua
 
-local uci = require('luci.model.uci').cursor()
+local uci = require('simple-uci').cursor()
 local model = require('platform_info').get_model()
 local models = {}
 

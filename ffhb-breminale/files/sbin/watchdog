@@ -1,14 +1,13 @@
 #!/usr/bin/lua
 -- Enables or disables SSIDs depending on
 -- whether the gateway is reachable
+uci = require("uci").cursor()
 
-gateway   = "fe80::66d1:54ff:fec2:4a02%br-client"
-ssid      = "bremen.freifunk.net"
+gateway   = "fe80::1%br-client"
 attempts  = 3
 interval  = 60
 
 function run()
-  uci = require("uci").cursor()
 
   local reachable = false
   local enabled   = uci:get("wireless", "client_radio0", "disabled") ~= "1"
@@ -26,14 +25,14 @@ function run()
 
     uci:foreach("wireless", "wifi-iface",
       function(s)
-        -- wifi without encryption or management?
-        if string.match(s['.name'], "^client_") then
-          uci:set("wireless", s['.name'], "disabled", reachable and '0' or '1')
-        end
-
         -- node specific wifi
         if string.match(s['.name'], "^priv_") then
           uci:set("wireless", s['.name'], "disabled", reachable and '1' or '0')
+        end
+
+        -- wifi without encryption or management?
+        if string.match(s['.name'], "^client_") then
+          uci:set("wireless", s['.name'], "disabled", reachable and '0' or '1')
         end
     end)
 
@@ -44,6 +43,26 @@ function run()
 
 end
 
+
+-- check on startup, if own interface is ready
+local enabled   = uci:get("wireless", "client_radio0", "disabled") ~= "1"
+
+uci:foreach("wireless", "wifi-iface",
+	function(s)
+		-- node specific wifi
+		if string.match(s['.name'], "^priv_") then
+			uci:set("wireless", s['.name'], "disabled", reachable and '1' or '0')
+		end
+
+		-- wifi without encryption or management?
+		if string.match(s['.name'], "^client_") then
+			uci:set("wireless", s['.name'], "disabled", reachable and '0' or '1')
+		end
+end)
+uci:save("wireless")
+os.execute("wifi")
+
+-- start watchdog
 while true do
   run()
   os.execute("sleep " .. interval)

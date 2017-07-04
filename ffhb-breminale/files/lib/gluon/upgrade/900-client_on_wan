@@ -1,7 +1,30 @@
-#!/bin/sh
+#!/usr/bin/lua
 
-if [ "$(uci get network.wan.auto)" == '1' ]; then
-  uci set network.wan.auto='0'
-  uci add_list network.client.ifname=$(uci get network.wan.ifname)
-  uci commit network
-fi
+local platform_info = require('platform_info')
+local table = require "table"
+
+local uci = require('simple-uci')
+ucicur = uci.cursor()
+
+
+if string.match(platform_info.get_image_name(), "cpe") then
+	if ucicur:get('network','wan','auto') == '1' then
+		ucicur:set('network','wan','auto','0')
+		ucicur:save('network')
+	end
+	if ucicur:get('network','mesh_wan','auto') == '0' then
+		ucicur:set('network','mesh_wan','auto','1')
+		ucicur:save('network')
+	end
+else
+	if ucicur:get('network','wan','auto') == '1' then
+		ucicur:set('network','wan','auto','0')
+
+		ifname = ucicur:get('network','wan','ifname')
+		iftable=ucicur:get_list('network','client','ifname')
+		table.insert(iftable,ifname)
+		ucicur:set_list('network','client','ifname',iftable)
+
+		ucicur:save('network')
+	end
+end

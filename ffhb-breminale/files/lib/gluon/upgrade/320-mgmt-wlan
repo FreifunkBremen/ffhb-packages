@@ -21,10 +21,7 @@ end
 
 local function configure_radio(radio, index, _)
   local suffix = radio:match('^radio(%d+)$')
-  local hwmode = uci:get('wireless', radio, 'hwmode')
-  if hwmode == '11a' or hwmode == '11na' then
-    configure_mgmt(radio, index, suffix)
-  end
+  configure_mgmt(radio, index, suffix)
 end
 
 util.iterate_radios(uci, configure_radio)

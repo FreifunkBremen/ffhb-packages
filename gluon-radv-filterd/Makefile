@@ -6,25 +6,22 @@ PKG_RELEASE:=1
 
 PKG_BUILD_DIR := $(BUILD_DIR)/$(PKG_NAME)
 
-include $(INCLUDE_DIR)/package.mk
+include ../gluon.mk
 
 define Package/gluon-radv-filterd
   SECTION:=gluon
   CATEGORY:=Gluon
   TITLE:=Filter IPv6 router advertisements
-  DEPENDS:=+gluon-ebtables +libgluonutil
+  DEPENDS:=+gluon-ebtables +libgluonutil +libbatadv +libnl-tiny
 endef
+
+MAKE_VARS += \
+        LIBNL_NAME="libnl-tiny" \
+        LIBNL_GENL_NAME="libnl-tiny"
 
 define Build/Prepare
 	mkdir -p $(PKG_BUILD_DIR)
 	$(CP) ./src/* $(PKG_BUILD_DIR)/
-endef
-
-define Build/Configure
-endef
-
-define Build/Compile
-	CFLAGS="$(TARGET_CFLAGS)" CPPFLAGS="$(TARGET_CPPFLAGS)" $(MAKE) -C $(PKG_BUILD_DIR) $(TARGET_CONFIGURE_OPTS)
 endef
 
 define Package/gluon-radv-filterd/install

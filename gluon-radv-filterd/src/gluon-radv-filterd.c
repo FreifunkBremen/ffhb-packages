@@ -1,5 +1,6 @@
 /*
    Copyright (c) 2016 Jan-Philipp Litza <janphilipp@litza.de>
+   Copyright (c) 2017 Sven Eckelmann <sven@narfation.org>
    All rights reserved.
 
    Redistribution and use in source and binary forms, with or without
@@ -23,7 +24,6 @@
    OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#define _GNU_SOURCE
 #include <errno.h>
 #include <signal.h>
 #include <stdarg.h>
@@ -41,6 +41,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
+#include <net/ethernet.h>
 #include <net/if.h>
 
 #include <linux/filter.h>
@@ -48,7 +49,13 @@
 #include <linux/limits.h>
 
 #include <netinet/icmp6.h>
+#include <netinet/in.h>
 #include <netinet/ip6.h>
+
+#include <netlink/netlink.h>
+#include <netlink/genl/genl.h>
+#include <netlink/genl/ctrl.h>
+#include <batadv-genl.h>
 
 #include "mac.h"
 
@@ -61,17 +68,12 @@
 #define MIN_INTERVAL 15
 
 // max execution time of a single ebtables call in nanoseconds
-#define EBTABLES_TIMEOUT 5e8 // 500ms
+#define EBTABLES_TIMEOUT 500000000 // 500ms
 
 // TQ value assigned to local routers
 #define LOCAL_TQ 512
 
 #define BUFSIZE 1500
-
-#define DEBUGFS "/sys/kernel/debug/batman_adv/%s/"
-#define ORIGINATORS DEBUGFS "originators"
-#define TRANSTABLE_GLOBAL DEBUGFS "transtable_global"
-#define TRANSTABLE_LOCAL DEBUGFS "transtable_local"
 
 #ifdef DEBUG
 #define CHECK(stmt) \
@@ -89,22 +91,23 @@
 #define ARRAY_SIZE(A) (sizeof(A)/sizeof(A[0]))
 #endif
 
-struct list_item {
-	struct list *next;
-};
-
 #define foreach(item, list) \
-	for(item = list; item != NULL; item = item->next)
+	for((item) = (list); (item) != NULL; (item) = (item)->next)
+
+#define foreach_safe(item, safe, list) \
+	for ((item) = (list); \
+	     (item) && (((safe) = item->next) || 1); \
+	     (item) = (safe))
 
 struct router {
 	struct router *next;
-	macaddr_t src;
-	time_t eol;
-	macaddr_t originator;
+	struct ether_addr src;
+	struct timespec eol;
+	struct ether_addr originator;
 	uint16_t tq;
 };
 
-struct global {
+static struct global {
 	int sock;
 	struct router *routers;
 	const char *mesh_iface;
@@ -112,16 +115,21 @@ struct global {
 	uint16_t max_tq;
 	uint16_t hysteresis_thresh;
 	struct router *best_router;
+	volatile sig_atomic_t stop_daemon;
 } G = {
 	.mesh_iface = "bat0",
 };
 
+static int fork_execvp_timeout(struct timespec *timeout, const char *file,
+			       const char *const argv[]);
 
-static void error(int status, int errnum, char *message, ...) {
+static void error_message(int status, int errnum, char *message, ...) {
 	va_list ap;
 	va_start(ap, message);
 	fflush(stdout);
 	vfprintf(stderr, message, ap);
+	va_end(ap);
+
 	if (errnum)
 		fprintf(stderr, ": %s", strerror(errnum));
 	fprintf(stderr, "\n");
@@ -129,14 +137,43 @@ static void error(int status, int errnum, char *message, ...) {
 		exit(status);
 }
 
-static void cleanup() {
+static int timespec_diff(struct timespec *tv1, struct timespec *tv2,
+			 struct timespec *tvdiff)
+{
+	tvdiff->tv_sec = tv1->tv_sec - tv2->tv_sec;
+	if (tv1->tv_nsec < tv2->tv_nsec) {
+		tvdiff->tv_nsec = 1000000000 + tv1->tv_nsec - tv2->tv_nsec;
+		tvdiff->tv_sec -= 1;
+	} else {
+		tvdiff->tv_nsec = tv1->tv_nsec - tv2->tv_nsec;
+	}
+
+	return (tvdiff->tv_sec >= 0);
+}
+
+static void cleanup(void) {
 	struct router *router;
+	struct timespec timeout = {
+		.tv_nsec = EBTABLES_TIMEOUT,
+	};
+
 	close(G.sock);
 
 	while (G.routers != NULL) {
 		router = G.routers;
 		G.routers = router->next;
 		free(router);
+	}
+
+	if (G.chain) {
+		/* Reset chain to accept everything again */
+		if (fork_execvp_timeout(&timeout, "ebtables", (const char *[])
+				{ "ebtables", "--concurrent", "-F", G.chain, NULL }))
+			DEBUG_MSG("warning: flushing ebtables chain %s failed, not adding a new rule", G.chain);
+
+		if (fork_execvp_timeout(&timeout, "ebtables", (const char *[])
+				{ "ebtables", "--concurrent", "-A", G.chain, "-j", "ACCEPT", NULL }))
+			DEBUG_MSG("warning: adding new rule to ebtables chain %s failed", G.chain);
 	}
 }
 
@@ -172,19 +209,31 @@ static void usage(const char *msg) {
 
 static inline void exit_errno(const char *message) {
 	cleanup();
-	error(1, errno, "error: %s", message);
+	error_message(1, errno, "error: %s", message);
 }
 
 static inline void warn_errno(const char *message) {
-	error(0, errno, "warning: %s", message);
+	error_message(0, errno, "warning: %s", message);
 }
 
 static int init_packet_socket(unsigned int ifindex) {
 	struct sock_filter radv_filter_code[] = {
+		// check that this is an ICMPv6 packet
+		BPF_STMT(BPF_LD|BPF_B|BPF_ABS, offsetof(struct ip6_hdr, ip6_nxt)),
+		BPF_JUMP(BPF_JMP|BPF_JEQ|BPF_K, IPPROTO_ICMPV6, 0, 7),
+		// check that this is a router advertisement
 		BPF_STMT(BPF_LD|BPF_B|BPF_ABS, sizeof(struct ip6_hdr) + offsetof(struct icmp6_hdr, icmp6_type)),
-		BPF_JUMP(BPF_JMP|BPF_JEQ|BPF_K, ND_ROUTER_ADVERT, 1, 0),
-		BPF_STMT(BPF_RET|BPF_K, 0),
+		BPF_JUMP(BPF_JMP|BPF_JEQ|BPF_K, ND_ROUTER_ADVERT, 0, 5),
+		// check that the code field in the ICMPv6 header is 0
+		BPF_STMT(BPF_LD|BPF_B|BPF_ABS, sizeof(struct ip6_hdr) + offsetof(struct nd_router_advert, nd_ra_code)),
+		BPF_JUMP(BPF_JMP|BPF_JEQ|BPF_K, 0, 0, 3),
+		// check that this is a default route (lifetime > 0)
+		BPF_STMT(BPF_LD|BPF_H|BPF_ABS, sizeof(struct ip6_hdr) + offsetof(struct nd_router_advert, nd_ra_router_lifetime)),
+		BPF_JUMP(BPF_JMP|BPF_JEQ|BPF_K, 0, 1, 0),
+		// return true
 		BPF_STMT(BPF_RET|BPF_K, 0xffffffff),
+		// return false
+		BPF_STMT(BPF_RET|BPF_K, 0),
 	};
 
 	struct sock_fprog radv_filter = {
@@ -204,7 +253,9 @@ static int init_packet_socket(unsigned int ifindex) {
 		.sll_protocol = htons(ETH_P_IPV6),
 		.sll_ifindex = ifindex,
 	};
-	bind(sock, (struct sockaddr *)&bind_iface, sizeof(bind_iface));
+	ret = bind(sock, (struct sockaddr *)&bind_iface, sizeof(bind_iface));
+	if (ret < 0)
+		exit_errno("can't bind socket");
 
 	return sock;
 }
@@ -217,7 +268,7 @@ static void parse_cmdline(int argc, char *argv[]) {
 	while ((c = getopt(argc, argv, "c:hi:m:t:")) != -1) {
 		switch (c) {
 			case 'i':
-				if (G.sock != 0)
+				if (G.sock >= 0)
 					usage("-i given more than once");
 				ifindex = if_nametoindex(optarg);
 				if (ifindex == 0)
@@ -248,67 +299,95 @@ static void parse_cmdline(int argc, char *argv[]) {
 	}
 }
 
+static struct router *router_find_src(const struct ether_addr *src) {
+	struct router *router;
+
+	foreach(router, G.routers) {
+		if (ether_addr_equal(router->src, *src))
+			return router;
+	}
+
+	return NULL;
+}
+
+static struct router *router_find_orig(const struct ether_addr *orig) {
+	struct router *router;
+
+	foreach(router, G.routers) {
+		if (ether_addr_equal(router->originator, *orig))
+			return router;
+	}
+
+	return NULL;
+}
+
+static struct router *router_add(const struct ether_addr *mac) {
+	struct router *router;
+
+	router = malloc(sizeof(*router));
+	if (!router)
+		return NULL;
+
+	router->src = *mac;
+	router->next = G.routers;
+	G.routers = router;
+	router->eol.tv_sec = 0;
+	router->eol.tv_nsec = 0;
+	memset(&router->originator, 0, sizeof(router->originator));
+
+	return router;
+}
+
+static void router_update(const struct ether_addr *mac, uint16_t timeout) {
+	struct router *router;
+
+	router = router_find_src(mac);
+	if (!router)
+		router = router_add(mac);
+	if (!router)
+		return;
+
+	clock_gettime(CLOCK_MONOTONIC, &router->eol);
+	router->eol.tv_sec += timeout;
+}
+
 static void handle_ra(int sock) {
 	struct sockaddr_ll src;
-	unsigned int addr_size = sizeof(src);
-	size_t len;
-	uint8_t buffer[BUFSIZE] __attribute__((aligned(8)));
-	struct ip6_hdr *pkt;
-	struct ip6_ext *ext;
-	struct nd_router_advert *ra;
-	uint8_t ext_type;
+	struct ether_addr mac;
+	socklen_t addr_size = sizeof(src);
+	ssize_t len;
+	struct {
+		struct ip6_hdr ip6;
+		struct nd_router_advert ra;
+	} pkt;
 
-	len = recvfrom(sock, buffer, BUFSIZE, 0, (struct sockaddr *)&src, &addr_size);
+	len = recvfrom(sock, &pkt, sizeof(pkt), 0, (struct sockaddr *)&src, &addr_size);
+	CHECK(len >= 0);
 
-	// skip IPv6 headers, ensuring packet is long enough
-	CHECK(len > sizeof(struct ip6_hdr));
-	pkt = (struct ip6_hdr *)buffer;
-	CHECK(len >= ntohs(pkt->ip6_plen) + sizeof(struct ip6_hdr));
-	ext_type = pkt->ip6_nxt;
-	ext = (void*)pkt + sizeof(struct ip6_hdr);
-	while (ext_type != IPPROTO_ICMPV6) {
-		CHECK((void*)ext < (void*)pkt + sizeof(struct ip6_hdr) + len);
-		CHECK(ext->ip6e_len > 0);
-		ext_type = ext->ip6e_nxt;
-		ext = (void*)ext + ext->ip6e_len;
-	}
+	// BPF already checked that this is an ICMPv6 RA of a default router
+	CHECK((size_t)len >= sizeof(pkt));
+	CHECK(ntohs(pkt.ip6.ip6_plen) + sizeof(struct ip6_hdr) >= sizeof(pkt));
 
-	// partially parse router advertisement
-	CHECK((void*)ext + sizeof(struct nd_router_advert) <= (void*)pkt + sizeof(struct ip6_hdr) + len);
-	ra = (struct nd_router_advert *) ext;
-	CHECK(ra->nd_ra_type == ND_ROUTER_ADVERT);
-	CHECK(ra->nd_ra_code == 0);
-	// we only want default routers
-	CHECK(ra->nd_ra_router_lifetime > 0);
+	memcpy(&mac, src.sll_addr, sizeof(mac));
+	DEBUG_MSG("received valid RA from " F_MAC, F_MAC_VAR(mac));
 
-	DEBUG_MSG("received valid RA from " F_MAC, F_MAC_VAR(src.sll_addr));
-
-	// update list of known routers
-	struct router *router;
-	foreach(router, G.routers) {
-		if (!memcmp(router->src, src.sll_addr, sizeof(macaddr_t))) {
-			break;
-		}
-	}
-	if (!router) {
-		router = malloc(sizeof(struct router));
-		memcpy(router->src, src.sll_addr, 8);
-		router->next = G.routers;
-		G.routers = router;
-	}
-	router->eol = time(NULL) + ra->nd_ra_router_lifetime;
+	router_update(&mac, ntohs(pkt.ra.nd_ra_router_lifetime));
 
 check_failed:
 	return;
 }
 
-static void expire_routers() {
+static void expire_routers(void) {
 	struct router **prev_ptr = &G.routers;
 	struct router *router;
-	time_t now = time(NULL);
+	struct router *safe;
+	struct timespec now;
+	struct timespec diff;
 
-	foreach(router, G.routers) {
-		if (router->eol < now) {
+	clock_gettime(CLOCK_MONOTONIC, &now);
+
+	foreach_safe(router, safe, G.routers) {
+		if (timespec_diff(&now, &router->eol, &diff)) {
 			DEBUG_MSG("router " F_MAC " expired", F_MAC_VAR(router->src));
 			*prev_ptr = router->next;
 			if (G.best_router == router)
@@ -320,83 +399,194 @@ static void expire_routers() {
 	}
 }
 
-static void update_tqs() {
-	FILE *f;
+static int parse_tt_global(struct nl_msg *msg,
+			   void *arg __attribute__((unused)))
+{
+	static const enum batadv_nl_attrs mandatory[] = {
+		BATADV_ATTR_TT_ADDRESS,
+		BATADV_ATTR_ORIG_ADDRESS,
+	};
+	struct nlattr *attrs[BATADV_ATTR_MAX + 1];
+	struct nlmsghdr *nlh = nlmsg_hdr(msg);
+	struct ether_addr mac_a, mac_b;
+	struct genlmsghdr *ghdr;
 	struct router *router;
-	char path[PATH_MAX];
-	char *line = NULL;
-	size_t len = 0;
+	uint8_t *addr;
+	uint8_t *orig;
+
+	// parse netlink entry
+	if (!genlmsg_valid_hdr(nlh, 0))
+		return NL_OK;
+
+	ghdr = nlmsg_data(nlh);
+
+	if (ghdr->cmd != BATADV_CMD_GET_TRANSTABLE_GLOBAL)
+		return NL_OK;
+
+	if (nla_parse(attrs, BATADV_ATTR_MAX, genlmsg_attrdata(ghdr, 0),
+		      genlmsg_len(ghdr), batadv_genl_policy)) {
+		return NL_OK;
+	}
+
+	if (batadv_genl_missing_attrs(attrs, mandatory, ARRAY_SIZE(mandatory)))
+		return NL_OK;
+
+	addr = nla_data(attrs[BATADV_ATTR_TT_ADDRESS]);
+	orig = nla_data(attrs[BATADV_ATTR_ORIG_ADDRESS]);
+
+	if (!attrs[BATADV_ATTR_FLAG_BEST])
+		return NL_OK;
+
+	MAC2ETHER(mac_a, addr);
+	MAC2ETHER(mac_b, orig);
+
+	// update router
+	router = router_find_src(&mac_a);
+	if (!router)
+		return NL_OK;
+
+	DEBUG_MSG("Found originator for " F_MAC ", it's " F_MAC,
+		  F_MAC_VAR(router->src), F_MAC_VAR(mac_b));
+	router->originator = mac_b;
+
+	return NL_OK;
+}
+
+static int parse_originator(struct nl_msg *msg,
+			    void *arg __attribute__((unused)))
+{
+
+	static const enum batadv_nl_attrs mandatory[] = {
+		BATADV_ATTR_ORIG_ADDRESS,
+		BATADV_ATTR_TQ,
+	};
+	struct nlattr *attrs[BATADV_ATTR_MAX + 1];
+	struct nlmsghdr *nlh = nlmsg_hdr(msg);
+	struct ether_addr mac_a;
+	struct genlmsghdr *ghdr;
+	struct router *router;
+	uint8_t *orig;
 	uint8_t tq;
+
+	// parse netlink entry
+	if (!genlmsg_valid_hdr(nlh, 0))
+		return NL_OK;
+
+	ghdr = nlmsg_data(nlh);
+
+	if (ghdr->cmd != BATADV_CMD_GET_ORIGINATORS)
+		return NL_OK;
+
+	if (nla_parse(attrs, BATADV_ATTR_MAX, genlmsg_attrdata(ghdr, 0),
+		      genlmsg_len(ghdr), batadv_genl_policy)) {
+		return NL_OK;
+	}
+
+	if (batadv_genl_missing_attrs(attrs, mandatory, ARRAY_SIZE(mandatory)))
+		return NL_OK;
+
+	orig = nla_data(attrs[BATADV_ATTR_ORIG_ADDRESS]);
+	tq = nla_get_u8(attrs[BATADV_ATTR_TQ]);
+
+	if (!attrs[BATADV_ATTR_FLAG_BEST])
+		return NL_OK;
+
+	MAC2ETHER(mac_a, orig);
+
+	// update router
+	router = router_find_orig(&mac_a);
+	if (!router)
+		return NL_OK;
+
+	DEBUG_MSG("Found TQ for router " F_MAC " (originator " F_MAC "), it's %d",
+		  F_MAC_VAR(router->src), F_MAC_VAR(router->originator), tq);
+	router->tq = tq;
+	if (router->tq > G.max_tq)
+		G.max_tq = router->tq;
+
+	return NL_OK;
+}
+
+static int parse_tt_local(struct nl_msg *msg,
+			  void *arg __attribute__((unused)))
+{
+	static const enum batadv_nl_attrs mandatory[] = {
+		BATADV_ATTR_TT_ADDRESS,
+	};
+	struct nlattr *attrs[BATADV_ATTR_MAX + 1];
+	struct nlmsghdr *nlh = nlmsg_hdr(msg);
+	struct ether_addr mac_a;
+	struct genlmsghdr *ghdr;
+	struct router *router;
+	uint8_t *addr;
+
+	// parse netlink entry
+	if (!genlmsg_valid_hdr(nlh, 0))
+		return NL_OK;
+
+	ghdr = nlmsg_data(nlh);
+
+	if (ghdr->cmd != BATADV_CMD_GET_TRANSTABLE_LOCAL)
+		return NL_OK;
+
+	if (nla_parse(attrs, BATADV_ATTR_MAX, genlmsg_attrdata(ghdr, 0),
+		      genlmsg_len(ghdr), batadv_genl_policy)) {
+		return NL_OK;
+	}
+
+	if (batadv_genl_missing_attrs(attrs, mandatory, ARRAY_SIZE(mandatory)))
+		return NL_OK;
+
+	addr = nla_data(attrs[BATADV_ATTR_TT_ADDRESS]);
+	MAC2ETHER(mac_a, addr);
+
+	// update router
+	router = router_find_src(&mac_a);
+	if (!router)
+		return NL_OK;
+
+	DEBUG_MSG("Found router " F_MAC " in transtable_local, assigning TQ %d",
+		  F_MAC_VAR(router->src), LOCAL_TQ);
+	router->tq = LOCAL_TQ;
+	if (router->tq > G.max_tq)
+		G.max_tq = router->tq;
+
+	return NL_OK;
+}
+
+static void update_tqs(void) {
+	struct router *router;
 	bool update_originators = false;
-	int i;
-	macaddr_t mac_a, mac_b;
+	struct ether_addr unspec;
+	struct batadv_nlquery_opts opts;
+	int ret;
 
 	// reset TQs
+	memset(&unspec, 0, sizeof(unspec));
 	foreach(router, G.routers) {
 		router->tq = 0;
-		for (i = 0; i < 6; i++)
-			if (router->originator[i] != 0)
-				break;
-		if (i >= 6)
+		if (ether_addr_equal(router->originator, unspec))
 			update_originators = true;
 	}
 
-	// TODO: Currently, we iterate over the whole list of routers all the
-	// time. Maybe it would be a good idea to sort routers that already
-	// have the current piece of information to the back. That way, we
-	// could abort as soon as we hit the first router with the current
-	// information filled in.
-
+	// translate all router's MAC addresses to originators simultaneously
 	if (update_originators) {
-		// translate all router's MAC addresses to originators simultaneously
-		snprintf(path, PATH_MAX, TRANSTABLE_GLOBAL, G.mesh_iface);
-		f = fopen(path, "r");
-		// skip header
-		while (fgetc(f) != '\n');
-		while (fgetc(f) != '\n');
-		while (fscanf(f, " %*[*+] " F_MAC "%*[0-9 -] (%*3u) via " F_MAC " %*[^]]]\n",
-				F_MAC_VAR(&mac_a), F_MAC_VAR(&mac_b)) == 12) {
-
-			foreach(router, G.routers) {
-				if (!memcmp(router->src, mac_a, sizeof(macaddr_t))) {
-					DEBUG_MSG("Found originator for " F_MAC ", it's " F_MAC, F_MAC_VAR(router->src), F_MAC_VAR(mac_b));
-					memcpy(router->originator, mac_b, sizeof(macaddr_t));
-					break; // foreach
-				}
-			}
-		}
-		if (!feof(f)) {
-			getline(&line, &len, f);
-			fprintf(stderr, "Parsing transtable_global aborted at this line: %s\n", line);
-		}
-		fclose(f);
+		opts.err = 0;
+		ret = batadv_genl_query(G.mesh_iface,
+					BATADV_CMD_GET_TRANSTABLE_GLOBAL,
+					parse_tt_global, NLM_F_DUMP, &opts);
+		if (ret < 0)
+			fprintf(stderr, "Parsing of global translation table failed\n");
 	}
 
 	// look up TQs of originators
 	G.max_tq = 0;
-	snprintf(path, PATH_MAX, ORIGINATORS, G.mesh_iface);
-	f = fopen(path, "r");
-	// skip header
-	while (fgetc(f) != '\n');
-	while (fgetc(f) != '\n');
-	while (fscanf(f, F_MAC " %*fs (%hhu) %*[^\n]\n",
-			F_MAC_VAR(&mac_a), &tq) == 7) {
-
-		foreach(router, G.routers) {
-			if (!memcmp(router->originator, mac_a, sizeof(macaddr_t))) {
-				DEBUG_MSG("Found TQ for router " F_MAC " (originator " F_MAC "), it's %d", F_MAC_VAR(router->src), F_MAC_VAR(router->originator), tq);
-				router->tq = tq;
-				if (tq > G.max_tq)
-					G.max_tq = tq;
-				break; // foreach
-			}
-		}
-	}
-	if (!feof(f)) {
-		getline(&line, &len, f);
-		fprintf(stderr, "Parsing originators aborted at this line: %s\n", line);
-	}
-	fclose(f);
+	opts.err = 0;
+	ret = batadv_genl_query(G.mesh_iface,
+				BATADV_CMD_GET_ORIGINATORS,
+				parse_originator, NLM_F_DUMP, &opts);
+	if (ret < 0)
+		fprintf(stderr, "Parsing of originators failed\n");
 
 	// if all routers have a TQ value, we don't need to check translocal
 	foreach(router, G.routers) {
@@ -404,35 +594,17 @@ static void update_tqs() {
 			break;
 	}
 	if (router != NULL) {
-		// rate local routers (if present) the highest
-		snprintf(path, PATH_MAX, TRANSTABLE_LOCAL, G.mesh_iface);
-		f = fopen(path, "r");
-		// skip header
-		while (fgetc(f) != '\n');
-		while (fgetc(f) != '\n');
-		while (fscanf(f, " * " F_MAC " [%*5s] %*f", F_MAC_VAR(&mac_a)) == 6) {
-			foreach(router, G.routers) {
-				if (!memcmp(router->src, mac_a, sizeof(macaddr_t))) {
-					DEBUG_MSG("Found router " F_MAC " in transtable_local, assigning TQ %d", F_MAC_VAR(router->src), LOCAL_TQ);
-					router->tq = LOCAL_TQ;
-					G.max_tq = LOCAL_TQ;
-					break; // foreach
-				}
-			}
-		}
-		if (!feof(f)) {
-			getline(&line, &len, f);
-			fprintf(stderr, "Parsing transtable_local aborted at this line: %s\n", line);
-		}
-		fclose(f);
+		opts.err = 0;
+		ret = batadv_genl_query(G.mesh_iface,
+					BATADV_CMD_GET_TRANSTABLE_LOCAL,
+					parse_tt_local, NLM_F_DUMP, &opts);
+		if (ret < 0)
+			fprintf(stderr, "Parsing of global translation table failed\n");
 	}
 
 	foreach(router, G.routers) {
 		if (router->tq == 0) {
-			for (i = 0; i < 6; i++)
-				if (router->originator[i] != 0)
-					break;
-			if (i >= 6)
+			if (ether_addr_equal(router->originator, unspec))
 				fprintf(stderr,
 					"Unable to find router " F_MAC " in transtable_{global,local}\n",
 					F_MAC_VAR(router->src));
@@ -443,34 +615,38 @@ static void update_tqs() {
 					F_MAC_VAR(router->src));
 		}
 	}
-
-	free(line);
 }
 
 static int fork_execvp_timeout(struct timespec *timeout, const char *file, const char *const argv[]) {
 	int ret;
 	pid_t child;
 	siginfo_t info;
-	sigset_t signals;
+	sigset_t signals, oldsignals;
 	sigemptyset(&signals);
 	sigaddset(&signals, SIGCHLD);
 
+	sigprocmask(SIG_BLOCK, &signals, &oldsignals);
 	child = fork();
-	if (!child) {
+	if (child == 0) {
+		sigprocmask(SIG_SETMASK, &oldsignals, NULL);
 		// casting discards const, but should be safe
 		// (see http://stackoverflow.com/q/36925388)
 		execvp(file, (char**) argv);
-		error(1, errno, "can't execvp(\"%s\", ...)", file);
+		fprintf(stderr, "can't execvp(\"%s\", ...): %s\n", file, strerror(errno));
+		_exit(1);
+	}
+	else if (child < 0) {
+		perror("Failed to fork()");
+		return -1;
 	}
 
-	sigprocmask(SIG_BLOCK, &signals, NULL);
 	ret = sigtimedwait(&signals, &info, timeout);
-	sigprocmask(SIG_UNBLOCK, &signals, NULL);
+	sigprocmask(SIG_SETMASK, &oldsignals, NULL);
 
 	if (ret == SIGCHLD) {
 		if (info.si_pid != child) {
 			cleanup();
-			error(1, 0,
+			error_message(1, 0,
 				"BUG: We received a SIGCHLD from a child we didn't spawn (expected PID %d, got %d)",
 				child, info.si_pid);
 		}
@@ -481,11 +657,11 @@ static int fork_execvp_timeout(struct timespec *timeout, const char *file, const
 	}
 
 	if (ret < 0 && errno == EAGAIN)
-		error(0, 0, "warning: child %d took too long, killing", child);
+		error_message(0, 0, "warning: child %d took too long, killing", child);
 	else if (ret < 0)
 		warn_errno("sigtimedwait failed, killing child");
 	else
-		error(1, 0,
+		error_message(1, 0,
 				"BUG: sigtimedwait() returned some other signal than SIGCHLD: %d",
 				ret);
 
@@ -495,14 +671,29 @@ static int fork_execvp_timeout(struct timespec *timeout, const char *file, const
 	return -1;
 }
 
-static void update_ebtables() {
+static bool election_required(void)
+{
+	if (!G.best_router)
+		return true;
+
+	/* should never happen. G.max_tq also contains G.best_router->tq */
+	if (G.max_tq < G.best_router->tq)
+		return false;
+
+	if ((G.max_tq - G.best_router->tq) <= G.hysteresis_thresh)
+		return false;
+
+	return true;
+}
+
+static void update_ebtables(void) {
 	struct timespec timeout = {
 		.tv_nsec = EBTABLES_TIMEOUT,
 	};
-	char mac[18];
+	char mac[F_MAC_LEN + 1];
 	struct router *router;
 
-	if (G.best_router && G.best_router->tq >= G.max_tq - G.hysteresis_thresh) {
+	if (!election_required()) {
 		DEBUG_MSG(F_MAC " is still good enough with TQ=%d (max_tq=%d), not executing ebtables",
 			F_MAC_VAR(G.best_router->src),
 			G.best_router->tq,
@@ -529,28 +720,43 @@ static void update_ebtables() {
 	G.best_router = router;
 
 	if (fork_execvp_timeout(&timeout, "ebtables", (const char *[])
-			{ "ebtables", "-F", G.chain, NULL }))
-		error(0, 0, "warning: flushing ebtables chain %s failed, not adding a new rule", G.chain);
+			{ "ebtables", "--concurrent", "-F", G.chain, NULL }))
+		error_message(0, 0, "warning: flushing ebtables chain %s failed, not adding a new rule", G.chain);
 	else if (fork_execvp_timeout(&timeout, "ebtables", (const char *[])
-			{ "ebtables", "-A", G.chain, "-s", mac, "-j", "ACCEPT", NULL }))
-		error(0, 0, "warning: adding new rule to ebtables chain %s failed", G.chain);
+			{ "ebtables", "--concurrent", "-A", G.chain, "-s", mac, "-j", "ACCEPT", NULL }))
+		error_message(0, 0, "warning: adding new rule to ebtables chain %s failed", G.chain);
+}
+
+static void sighandler(int sig __attribute__((unused)))
+{
+	G.stop_daemon = 1;
 }
 
 int main(int argc, char *argv[]) {
 	int retval;
 	fd_set rfds;
 	struct timeval tv;
-	time_t last_update = time(NULL);
+	struct timespec next_update;
+	struct timespec now;
+	struct timespec diff;
 
+	clock_gettime(CLOCK_MONOTONIC, &next_update);
+	next_update.tv_sec += MIN_INTERVAL;
+
+	G.sock = -1;
 	parse_cmdline(argc, argv);
 
-	if (G.sock == 0)
+	if (G.sock < 0)
 		usage("No interface set!");
 
 	if (G.chain == NULL)
 		usage("No chain set!");
 
-	while (1) {
+	G.stop_daemon = 0;
+	signal(SIGINT, sighandler);
+	signal(SIGTERM, sighandler);
+
+	while (!G.stop_daemon) {
 		FD_ZERO(&rfds);
 		FD_SET(G.sock, &rfds);
 
@@ -558,9 +764,10 @@ int main(int argc, char *argv[]) {
 		tv.tv_usec = 0;
 		retval = select(G.sock + 1, &rfds, NULL, NULL, &tv);
 
-		if (retval < 0)
-			exit_errno("select() failed");
-		else if (retval) {
+		if (retval < 0) {
+			if (errno != EINTR)
+				exit_errno("select() failed");
+		} else if (retval) {
 			if (FD_ISSET(G.sock, &rfds)) {
 				handle_ra(G.sock);
 			}
@@ -568,14 +775,18 @@ int main(int argc, char *argv[]) {
 		else
 			DEBUG_MSG("select() timeout expired");
 
-		if (G.routers != NULL && last_update <= time(NULL) - MIN_INTERVAL) {
+		clock_gettime(CLOCK_MONOTONIC, &now);
+		if (G.routers != NULL &&
+		    timespec_diff(&now, &next_update, &diff)) {
 			expire_routers();
 
 			// all routers could have expired, check again
 			if (G.routers != NULL) {
 				update_tqs();
 				update_ebtables();
-				last_update = time(NULL);
+
+				next_update = now;
+				next_update.tv_sec += MIN_INTERVAL;
 			}
 		}
 	}

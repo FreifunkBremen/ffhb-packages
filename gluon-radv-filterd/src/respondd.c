@@ -2,39 +2,43 @@
 
 #include <json-c/json.h>
 #include <libgluonutil.h>
+#include <net/ethernet.h>
 #include <stdio.h>
 
 #include "mac.h"
 
 static struct json_object * get_radv_filter() {
-	FILE *f = popen("exec ebtables -L RADV_FILTER", "r");
+	FILE *f = popen("exec ebtables --concurrent -L RADV_FILTER", "r");
 	char *line = NULL;
 	size_t len = 0;
-	macaddr_t mac = { 0 };
-	struct json_object *ret = NULL;
+	struct ether_addr mac = {};
+	struct ether_addr unspec = {};
+	char macstr[F_MAC_LEN + 1] = "";
 
 	if (!f)
 		return NULL;
 
 	while (getline(&line, &len, f) > 0) {
-		if (sscanf(line, "-s " F_MAC " -j ACCEPT\n", F_MAC_VAR(&mac)) == ETH_ALEN)
+		if (sscanf(line, "-s " F_MAC " -j ACCEPT\n", F_MAC_VAR_REF(mac)) == ETH_ALEN)
 			break;
 	}
+	free(line);
 
 	pclose(f);
 
-	sprintf(line, F_MAC, F_MAC_VAR(mac));
-	ret = gluonutil_wrap_string(line);
-	free(line);
-	return ret;
+	memset(&unspec, 0, sizeof(unspec));
+	if (ether_addr_equal(mac, unspec)) {
+		return NULL;
+	} else {
+		snprintf(macstr, sizeof(macstr), F_MAC, F_MAC_VAR(mac));
+		return gluonutil_wrap_string(macstr);
+	}
 }
 
 static struct json_object * respondd_provider_statistics() {
 	struct json_object *ret = json_object_new_object();
 
-	struct json_object *radv_filter = get_radv_filter();
-	if (radv_filter)
-		json_object_object_add(ret, "gateway6", radv_filter);
+	json_object_object_add(ret, "gateway6", get_radv_filter());
 
 	return ret;
 }

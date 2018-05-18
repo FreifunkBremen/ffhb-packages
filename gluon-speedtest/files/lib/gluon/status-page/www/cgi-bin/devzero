@@ -1,4 +1,5 @@
 #!/bin/sh
+echo "Access-Control-Allow-Origin: *"
 echo
 cat /dev/zero
 

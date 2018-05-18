@@ -69,7 +69,7 @@
 
 // Remember the originator of a router for at most this period of time (in
 // seconds). Re-read it from the transtable afterwards.
-#define ORIGINATOR_CACHE_TTL 900
+#define ORIGINATOR_CACHE_TTL 300
 
 // max execution time of a single ebtables call in nanoseconds
 #define EBTABLES_TIMEOUT 500000000 // 500ms

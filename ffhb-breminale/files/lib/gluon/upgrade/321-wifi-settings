@@ -5,12 +5,7 @@ local util = require 'gluon.util'
 local uci = require('simple-uci').cursor()
 
 local function configure_client(radio, index, suffix)
-  local hwmode = uci:get('wireless', radio, 'hwmode')
   uci:set('wireless', radio, 'txpower', 0)
-  if hwmode == '11g' or hwmode == '11ng' then
-    uci:set('wireless', radio, 'supported_rates', '6000 9000 12000 18000 24000 36000 48000 54000')
-    uci:set('wireless', radio, 'basic_rate', '6000 9000 18000 36000 54000')
-  end
   local client = 'client_' .. radio
   if uci:get('wireless', client) then
     uci:set('wireless', client, 'maxassoc', 60)
@@ -20,10 +15,10 @@ local function configure_client(radio, index, suffix)
 end
 
 local function configure_radio(radio, index, _)
-  local suffix = radio:match('^radio(%d+)$')
-  configure_client(radio, index, suffix)
+  local suffix = radio[".name"]:match('^radio(%d+)$')
+  configure_client(radio[".name"], index, suffix)
 end
 
-util.iterate_radios(uci, configure_radio)
+util.foreach_radio(uci, configure_radio)
 
 uci:save('wireless')

@@ -1,4 +1,0 @@
-#!/bin/sh
-uci set wireless.mesh_radio0.disabled='1'
-uci set wireless.mesh_radio1.disabled='1'
-uci commit wireless

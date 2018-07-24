@@ -1,6 +1,0 @@
-#!/usr/bin/lua
-
-local uci = require('simple-uci').cursor()
-
-uci:set('lldpd', 'config', 'interface', 'eth0')
-uci:save('lldpd')

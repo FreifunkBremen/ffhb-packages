@@ -7,7 +7,7 @@ local uci = require('simple-uci')
 ucicur = uci.cursor()
 
 
-if string.match(platform_info.get_image_name(), "cpe") then
+if string.match(platform_info.get_image_name(), "cpe") || string.match(platform_info.get_image_name(), "ac-mesh") then
 	if ucicur:get('network','wan','auto') == '1' then
 		ucicur:set('network','wan','auto','0')
 		ucicur:save('network')

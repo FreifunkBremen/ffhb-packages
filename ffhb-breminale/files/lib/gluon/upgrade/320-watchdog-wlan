@@ -20,10 +20,10 @@ local function configure_mgmt(radio, index, suffix)
 end
 
 local function configure_radio(radio, index, _)
-  local suffix = radio:match('^radio(%d+)$')
-  configure_mgmt(radio, index, suffix)
+  local suffix = radio[".name"]:match('^radio(%d+)$')
+  configure_mgmt(radio[".name"], index, suffix)
 end
 
-util.iterate_radios(uci, configure_radio)
+util.foreach_radio(uci, configure_radio)
 
 uci:save('wireless')

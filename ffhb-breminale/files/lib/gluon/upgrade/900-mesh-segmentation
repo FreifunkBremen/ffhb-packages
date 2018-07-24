@@ -32,7 +32,7 @@ if string.match(platform_info.get_image_name(), "archer%-c7") or string.match(pl
   uci:delete('network', 'mesh_lan3')
   uci:delete('network', 'mesh_lan4')
   uci:section('network', 'interface', 'mesh_lan2', {
-    ifname = 'eth1.2',
+    ifname = 'eth1.3',
     proto = 'gluon_wired',
     igmp_snooping = '0',
     index = '5',
@@ -41,7 +41,7 @@ if string.match(platform_info.get_image_name(), "archer%-c7") or string.match(pl
     macaddr=uci:get('network','meshlan','macaddr'),
   })
   uci:section('network', 'interface', 'mesh_lan3', {
-    ifname = 'eth1.3',
+    ifname = 'eth1.4',
     proto = 'gluon_wired',
     index = '6',
     igmp_snooping = '0',
@@ -50,7 +50,7 @@ if string.match(platform_info.get_image_name(), "archer%-c7") or string.match(pl
     macaddr=uci:get('network','meshlan','macaddr'),
   })
   uci:section('network', 'interface', 'mesh_lan4', {
-    ifname = 'eth1.4',
+    ifname = 'eth1.5',
     index = '7',
     proto = 'gluon_wired',
     igmp_snooping = '0',

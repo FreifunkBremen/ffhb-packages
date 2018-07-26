@@ -44,7 +44,7 @@ if string.match(platform_info.get_image_name(), "archer%-c7") or string.match(pl
     index = '5',
     disabled ='0',
     transitive = '1',
-    macaddr=uci:get('network','meshlan','macaddr'),
+    macaddr = util.generate_mac(5),
   })
   uci:section('network', 'interface', 'mesh_lan3', {
     ifname = eth..'.4',
@@ -53,7 +53,7 @@ if string.match(platform_info.get_image_name(), "archer%-c7") or string.match(pl
     igmp_snooping = '0',
     disabled ='0',
     transitive = '1',
-    macaddr=uci:get('network','meshlan','macaddr'),
+    macaddr = util.generate_mac(6),
   })
   uci:section('network', 'interface', 'mesh_lan4', {
     ifname = eth..'.5',
@@ -62,7 +62,7 @@ if string.match(platform_info.get_image_name(), "archer%-c7") or string.match(pl
     igmp_snooping = '0',
     disabled ='0',
     transitive = '1',
-    macaddr=uci:get('network','meshlan','macaddr'),
+    macaddr = util.generate_mac(1),
   })
 
   uci:save('network')

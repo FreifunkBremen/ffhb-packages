@@ -1,23 +1,25 @@
 #!/bin/sh
 if [ "$(uci -q get uhttpd.main.speedtest)" != "1" ]; then
-	echo -e "Status: 403 Forbidden\n\nSpeedtest is not allowed";
-	exit 1;
+	echo -e "Status: 403 Forbidden\n\nSpeedtest is not allowed"
+	exit 1
 fi;
 case "$QUERY_STRING" in
 	empty*)
-		echo -e "Status: 200 OK\n";
 		;;
 	getIP*)
-		echo -e "Status: 200 OK\n\n$REMOTE_ADDR";
+		echo
+		echo "$REMOTE_ADDR"
 		;;
 	garbage*)
-		ckSize=$(echo "$QUERY_STRING" | sed -e 's/^.*[&?]ckSize=\([0-9]*\).*$/\1/');
-		echo "$ckSize" | grep -q "^[0-9]*$" || ckSize=4;
-		echo -e "Status: 200 OK\n\n";
+		ckSize=$(echo "$QUERY_STRING" | sed -e '/[&?]ckSize=/!d' -e 's/^.*[&?]ckSize=\([0-9]*\).*$/\1/')"
+		if [ -z "$ckSize" ]; then
+			ckSize=4
+		fi
+		echo
 		dd if=/dev/zero bs=1048576 count="$ckSize"
 		;;
 	*)
-		echo -e "Status: 200 OK\n";
-		cat /dev/zero;
+		echo
+		cat /dev/zero
 		;;
 esac

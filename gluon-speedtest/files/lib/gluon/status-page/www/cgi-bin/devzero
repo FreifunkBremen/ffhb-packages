@@ -1,4 +1,25 @@
 #!/bin/sh
-echo
-cat /dev/zero
-
+if [ "$(uci -q get uhttpd.main.speedtest)" != "1" ]; then
+	echo -e "Status: 403 Forbidden\n\nSpeedtest is not allowed"
+	exit 1
+fi;
+case "$QUERY_STRING" in
+	empty*)
+		;;
+	getIP*)
+		echo
+		echo "$REMOTE_ADDR"
+		;;
+	garbage*)
+		ckSize=$(echo "$QUERY_STRING" | sed -e '/[&?]ckSize=/!d' -e 's/^.*[&?]ckSize=\([0-9]*\).*$/\1/')"
+		if [ -z "$ckSize" ]; then
+			ckSize=4
+		fi
+		echo
+		dd if=/dev/zero bs=1048576 count="$ckSize"
+		;;
+	*)
+		echo
+		cat /dev/zero
+		;;
+esac

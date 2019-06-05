@@ -11,7 +11,7 @@ define Package/ffhb-breminale
   SECTION:=gluon
   CATEGORY:=Gluon
   TITLE:=Breminale
-  DEPENDS:=+gluon-ebtables +gluon-ebtables-filter-ra-dhcp +gluon-ebtables-filter-multicast +hostapd-mini
+  DEPENDS:=+hostapd-mini
 endef
 
 define Package/ffhb-breminale/description

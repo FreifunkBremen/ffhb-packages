@@ -4,24 +4,14 @@ PKG_NAME:=respondd-module-lldp
 PKG_VERSION:=1
 PKG_RELEASE:=1
 
-PKG_LICENSE:=BSD-2-Clause
-
-PKG_BUILD_DEPENDS := respondd lldpd
-
 include $(INCLUDE_DIR)/package.mk
 
 define Package/respondd-module-lldp
-  SECTION:=net
-  CATEGORY:=Network
-  TITLE:=Add lldp to respondd
+  SECTION:=gluon
+  CATEGORY:=Gluon
+  TITLE:=adds lldp usage neighbours provider to respondd
   DEPENDS:=+respondd +lldpd
 endef
-
-
-define Build/Compile
-	CFLAGS="$(TARGET_CFLAGS)" CPPFLAGS="$(TARGET_CPPFLAGS)" $(MAKE) -C $(PKG_BUILD_DIR) $(TARGET_CONFIGURE_OPTS)
-endef
-
 
 define Package/respondd-module-lldp/install
 	$(INSTALL_DIR) $(1)/usr/lib/respondd

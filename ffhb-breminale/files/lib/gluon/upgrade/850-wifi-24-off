@@ -1,0 +1,20 @@
+#!/usr/bin/lua
+
+local platform_info = require('platform_info')
+local uci = require('simple-uci').cursor()
+local util = require 'gluon.util'
+
+if string.match(platform_info.get_image_name(), "zbt-wg3526-32m") then
+
+  local function configure_radio(radio, index, _)
+    local hwmode = radio.hwmode
+    if hwmode == '11g' or hwmode == '11ng' then
+      uci:set("wireless", radio['.name'], "disabled", '1')
+    end
+  end
+
+  util.foreach_radio(uci, configure_radio)
+
+  uci:save('wireless')
+
+end

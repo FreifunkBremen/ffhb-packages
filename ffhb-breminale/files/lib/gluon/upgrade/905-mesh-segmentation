@@ -69,7 +69,7 @@ do
     input = 'REJECT',
     forward = 'REJECT',
     output = 'ACCEPT',
-    network = {'switch_mesh'..i},
+    network = {'mesh_lan'..i},
   })
   uci:section('firewall', 'rule', 'mesh_c_lan'..i..'_ICMPv6_in', {
     src = 'mesh_c_lan'..i,

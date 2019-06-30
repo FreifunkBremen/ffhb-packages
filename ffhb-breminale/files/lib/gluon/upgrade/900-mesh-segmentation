@@ -65,10 +65,27 @@ do
   uci:delete('firewall', 'mesh_c_lan'..i..'_vxlan')
 
   uci:section('firewall', 'zone', 'mesh_c_lan'..i, {
+    name = 'mesh_c_lan'..i,
+    input = 'REJECT',
+    forward = 'REJECT',
+    output = 'ACCEPT',
+    network = {'switch_mesh'..i},
   })
   uci:section('firewall', 'rule', 'mesh_c_lan'..i..'_ICMPv6_in', {
+    src = 'mesh_c_lan'..i,
+    limit = '1000/sec',
+    family = 'ipv6',
+    target = 'ACCEPT',
+    proto = 'icmp',
   })
   uci:section('firewall', 'rule', 'mesh_c_lan'..i..'_vxlan', {
+    name = 'mesh_c_lan'..i..'_vxlan',
+    dest_port = '4789',
+    src = 'mesh_c_lan'..i,
+    src_ip = 'fe80::/64',
+    family = 'ipv6',
+    target = 'ACCEPT',
+    proto = 'udp',
   })
 end
 

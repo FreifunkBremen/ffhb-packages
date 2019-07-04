@@ -62,7 +62,7 @@ static void add_all_addresses_to_array (struct json_object* result_array)
                     {
                         ip_addr = rtnl_addr_get_local((struct rtnl_addr *) item_addr);
                         nl_addr2str(ip_addr, ip_buf, sizeof(ip_buf));
-                        json_object_array_add(ret_addresses, json_object_new_string(ip_buf));
+                        json_object_array_add(result_array, json_object_new_string(ip_buf));
                     }
                 }
             }

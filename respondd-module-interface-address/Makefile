@@ -14,8 +14,10 @@ define Package/respondd-module-interface-address
   SECTION:=net
   CATEGORY:=Network
   TITLE:=Add simple interface address to respondd
-  DEPENDS:=+respondd
+  DEPENDS:=+respondd +libnl-tiny
 endef
+
+TARGET_CFLAGS += -I$(STAGING_DIR)/usr/include/libnl-tiny
 
 define Package/respondd-module-interface-address/install
 	$(INSTALL_DIR) $(1)/usr/lib/respondd

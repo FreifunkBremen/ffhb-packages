@@ -1,0 +1,34 @@
+#!/usr/bin/lua
+
+local util = require 'gluon.util'
+
+local uci = require('simple-uci').cursor()
+
+local function configure_mgmt(radio, index, suffix)
+
+  uci:delete('wireless', 'mgmt_' .. radio)
+  uci:section('wireless', 'wifi-iface', 'mgmt_' .. radio, {
+      device = radio,
+      network = 'mgmt',
+      mode = 'ap',
+      ssid = 'mgmt.ffhb.de',
+      macaddr = util.generate_mac(7, index-1),
+      ifname = 'mgmt' .. suffix,
+      disabled = 0,
+      hidden = 0,
+      encryption = 'psk2',
+      key = '73t-m3-1n',
+  })
+end
+
+local function configure_radio(radio, index, _)
+  local suffix = radio[".name"]:match('^radio(%d+)$')
+  local hwmode = uci:get('wireless', radio, 'hwmode')
+  if hwmode == '11a' or hwmode == '11na' then
+    configure_mgmt(radio[".name"], index, suffix)
+  end
+end
+
+util.foreach_radio(uci, configure_radio)
+
+uci:save('wireless')

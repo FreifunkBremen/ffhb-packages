@@ -3,6 +3,7 @@
 local platform_info = require('platform_info')
 local uci = require('simple-uci').cursor()
 local util = require 'gluon.util'
+local site = require 'gluon.site'
 
 if string.match(platform_info.get_image_name(), "archer%-c7") or string.match(platform_info.get_image_name(), "tl%-wdr") or string.match(platform_info.get_image_name(), "zbt%-wg3526%-32m") then
 
@@ -19,7 +20,43 @@ if string.match(platform_info.get_image_name(), "archer%-c7") or string.match(pl
   end
   
   -- config wan to client (vlan 3)
-  uci:set('network', 'client', 'ifname', eth..'.3')
+   uci:section('network', 'interface', 'client', {
+       ipv6 = true,
+       proto = 'dhcpv6',
+       reqprefix = 'no',
+       peerdns = not site.dns.servers(),
+       sourcefilter = false,
+       keep_ra_dnslifetime = true,
+       robustness = 9,
+       query_interval = 2000,
+       query_response_interval = 500,
+       ifname = {
+          eth..'.3',
+         'local-port',
+      },
+  })
+  uci:delete('network', 'client_lan')
+
+  uci:delete('network', 'local_node_route')
+
+  uci:delete('network', 'local_node_route6')
+  uci:section('network', 'route6', 'local_node_route6', {
+      interface = 'client',
+      target = site.prefix6(),
+      gateway = '::',
+  })
+
+  uci:save('network')
+
+  local networks = uci:get_list('firewall', 'mesh', 'network')
+  util.add_to_set(networks, 'client')
+  uci:set_list('firewall', 'mesh', 'network', networks)
+
+  networks = uci:get_list('firewall', 'drop', 'network')
+  util.remove_from_set(networks, 'client')
+  uci:set_list('firewall', 'drop', 'network', networks)
+
+  uci:delete('firewall', 'local_node_dns')
 
   -- config mgmt-wifi to client (vlan 5)
   uci:delete('network', 'interface', 'mgmt')

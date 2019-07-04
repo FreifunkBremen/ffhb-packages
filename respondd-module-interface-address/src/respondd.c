@@ -3,81 +3,68 @@
 
 #include <net/if.h>
 #include <netlink/netlink.h>
-#include <netlink/route/link.h>
-#include <netlink/route/addr.h>
 
+
+struct ip_address_information {
+	struct json_object *addresses;
+};
+
+static int get_addresses_cb(struct nl_msg *msg, void *arg) {
+	struct ip_address_information *info = (struct ip_address_information*) arg;
+
+	struct nlmsghdr *nlh = nlmsg_hdr(msg);
+	struct ifaddrmsg *msg_content = NLMSG_DATA(nlh);
+	int remaining = nlh->nlmsg_len - NLMSG_LENGTH(sizeof(struct ifaddrmsg));
+	struct rtattr *hdr;
+
+	for (hdr = IFA_RTA(msg_content); RTA_OK(hdr, remaining); hdr = RTA_NEXT(hdr, remaining)) {
+		char addr_str_buf[INET6_ADDRSTRLEN];
+
+		if (hdr->rta_type != IFA_ADDRESS ||
+/*			msg_content->ifa_index != info->ifindex ||*/
+			msg_content->ifa_flags & (IFA_F_TENTATIVE|IFA_F_DEPRECATED)) {
+			continue;
+		}
+
+		if (inet_ntop(AF_INET6, (struct in6_addr *) RTA_DATA(hdr), addr_str_buf, INET6_ADDRSTRLEN)) {
+			json_object_array_add(info->addresses, json_object_new_string(addr_str_buf));
+		}
+	}
+
+	return NL_OK;
+}
 
 static void add_all_addresses_to_array (struct json_object* result_array)
 {
-    struct nl_sock *sock = NULL;
-    struct nl_cache *cache_link = NULL;
-    struct nl_cache *cache_addr = NULL;
-    int err = 0;
+	struct ip_address_information info = {
+		.addresses = result_array,
+	};
+	int err;
 
-    if ((sock = nl_socket_alloc()) == NULL)
-    {
-        perror("nl_socket_alloc");
-        goto end;
-    }
+	/* Open socket */
+	struct nl_sock *socket = nl_socket_alloc();
+	if (!socket) {
+		return;
+	}
 
-    if ((err = nl_connect(sock, NETLINK_ROUTE)) < 0)
-    {
-        nl_perror(err, "nl_connect");
-        goto end;
-    }
+	err = nl_connect(socket, NETLINK_ROUTE);
+	if (err < 0) {
+		goto out_free;
+	}
 
-    if ((err = rtnl_link_alloc_cache(sock, AF_UNSPEC, &cache_link)) < 0)
-    {
-        nl_perror(err, "rtnl_link_alloc_cache");
-        goto end;
-    }
+	/* Send message */
+	struct ifaddrmsg rt_hdr = { .ifa_family = AF_INET6, };
+	err = nl_send_simple(socket, RTM_GETADDR, NLM_F_REQUEST | NLM_F_ROOT, &rt_hdr, sizeof(struct ifaddrmsg));
+	if (err < 0) {
+		goto out_free;
+	}
 
-    if ((err = rtnl_addr_alloc_cache(sock, &cache_addr)) < 0)
-    {
-        nl_perror(err, "rtnl_addr_alloc_cache");
-        goto end;
-    }
+	/* Retrieve answer. Message is handled by get_addresses_cb */
+	nl_socket_modify_cb(socket, NL_CB_VALID, NL_CB_CUSTOM, get_addresses_cb, &info);
+	nl_recvmsgs_default(socket);
 
-    {
-        uint32_t flags;
-        struct nl_object *item_link = nl_cache_get_first(cache_link);
-        char ip_buf[BUFSIZ] = {0};
-        int ifidx;
-
-        for (; item_link; item_link = nl_cache_get_next(item_link))
-        {
-            struct nl_addr *ip_addr = NULL;
-            struct rtnl_link *link = (struct rtnl_link *) item_link;
-            flags = rtnl_link_get_flags(link);
-
-            /* skip loopback interface */
-            if (flags & IFF_LOOPBACK) continue;
-
-            ifidx = rtnl_link_get_ifindex(link);
-            {
-                struct nl_object *item_addr = nl_cache_get_first(cache_addr);
-                for (; item_addr; item_addr = nl_cache_get_next(item_addr))
-                {
-                    if (ifidx == rtnl_addr_get_ifindex((struct rtnl_addr *) item_addr))
-                    {
-                        ip_addr = rtnl_addr_get_local((struct rtnl_addr *) item_addr);
-                        nl_addr2str(ip_addr, ip_buf, sizeof(ip_buf));
-                        json_object_array_add(result_array, json_object_new_string(ip_buf));
-                    }
-                }
-            }
-        }
-    }
-
-end:
-    if (sock)
-        nl_close(sock);
-    if (cache_link)
-        nl_cache_free(cache_link);
-    if (cache_addr)
-        nl_cache_free(cache_addr);
-    if (sock)
-        nl_socket_free(sock);
+out_free:
+	nl_socket_free(socket);
 }
 
 static struct json_object * respondd_provider_nodeinfo(void) {

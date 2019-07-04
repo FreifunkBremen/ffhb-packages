@@ -12,7 +12,7 @@ local function configure_mgmt(radio, index, suffix)
       network = 'mgmt',
       mode = 'ap',
       ssid = 'mgmt.ffhb.de',
-      macaddr = util.generate_mac(7, index-1),
+      macaddr = util.generate_mac(6, index-1),
       ifname = 'mgmt' .. suffix,
       disabled = 0,
       hidden = 0,

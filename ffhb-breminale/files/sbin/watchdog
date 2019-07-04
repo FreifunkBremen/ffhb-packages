@@ -3,7 +3,7 @@
 -- whether the gateway is reachable
 uci = require("uci").cursor()
 
-gateway   = "2a06:8782:ffbb:bab0::9"
+gateway   = "2a06:8782:ffbb:baf0::1"
 attempts  = 15
 interval  = 30
 

@@ -4,6 +4,9 @@
 #include <net/if.h>
 #include <netlink/netlink.h>
 #include <netlink/genl/genl.h>
+#include <arpa/inet.h>
+#include <linux/if_addr.h>
+#include <linux/rtnetlink.h>
 
 
 struct ip_address_information {

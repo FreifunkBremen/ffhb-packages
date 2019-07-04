@@ -4,7 +4,7 @@ local platform_info = require('platform_info')
 local uci = require('simple-uci').cursor()
 local util = require 'gluon.util'
 
-if string.match(platform_info.get_image_name(), "zbt-wg3526-32m") then
+if string.match(platform_info.get_image_name(), "zbt%-wg3526%-32m") then
 
   local function configure_radio(radio, index, _)
     local hwmode = radio.hwmode

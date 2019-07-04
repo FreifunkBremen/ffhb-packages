@@ -3,6 +3,7 @@
 
 #include <net/if.h>
 #include <netlink/netlink.h>
+#include <netlink/genl/genl.h>
 
 
 struct ip_address_information {

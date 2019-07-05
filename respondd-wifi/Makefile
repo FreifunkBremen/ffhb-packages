@@ -12,7 +12,7 @@ include $(INCLUDE_DIR)/package.mk
 
 TARGET_CFLAGS += -I$(STAGING_DIR)/usr/include/libnl-tiny
 
-define Package/respondd-wifi/Default
+define Package/respondd-wifi
   SECTION:=net
   CATEGORY:=Network
   TITLE:=Add wifi statistics to respondd

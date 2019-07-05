@@ -20,7 +20,6 @@ static struct json_object *respondd_provider_statistics(void) {
 
 	clients = json_object_new_object();
 	if (!clients) {
-		json_object_put(wireless);
 		json_object_put(result);
 		return NULL;
 	}

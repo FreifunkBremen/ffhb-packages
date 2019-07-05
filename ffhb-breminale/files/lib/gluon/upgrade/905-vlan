@@ -5,7 +5,7 @@ local uci = require('simple-uci').cursor()
 local util = require 'gluon.util'
 local site = require 'gluon.site'
 
-if string.match(platform_info.get_image_name(), "archer%-c7") or string.match(platform_info.get_image_name(), "tl%-wdr") or string.match(platform_info.get_image_name(), "zbt%-wg3526%-32m") then
+if string.match(platform_info.get_image_name(), "ubiquiti%-unifi%-ac%-mesh") or string.match(platform_info.get_image_name(), "archer%-c7") or string.match(platform_info.get_image_name(), "tl%-wdr") or string.match(platform_info.get_image_name(), "zbt%-wg3526%-32m") then
 
 
   local eth = 'eth0'
@@ -70,22 +70,33 @@ if string.match(platform_info.get_image_name(), "archer%-c7") or string.match(pl
 
 
   -- Other VLANs
-  for i=2, 13, 1 do
-      uci:section('network', 'switch_vlan', 'vlan_' .. i, {
-          vlan = i,
-          ports = portlist,
-          device = 'switch0',
+  if string.match(platform_info.get_image_name(), "ubiquiti%-unifi%-ac%-mesh") then
+      for i=2, 13, 1 do
+          uci:section('network', 'device', 'vlan_' .. i, {
+              type = '8021q',
+              ifname = 'eth0',
+              vid = i,
+              name = 'eth0.'..i,
       })
   end
+  else
+      for i=2, 13, 1 do
+          uci:section('network', 'switch_vlan', 'vlan_' .. i, {
+              vlan = i,
+              ports = portlist,
+              device = 'switch0',
+          })
+      end
 
 
-  -- Set PVID for ports (should fix stp?)
-  uci:delete_all('network', 'switch_port')
-  for i=0, 6, 1 do
-      uci:section('network', 'switch_port', 'port_' .. i, {
-          pvid = 1,
-          port = i,
-      })
+      -- Set PVID for ports (should fix stp?)
+      uci:delete_all('network', 'switch_port')
+      for i=0, 6, 1 do
+          uci:section('network', 'switch_port', 'port_' .. i, {
+              pvid = 1,
+              port = i,
+          })
+      end
   end
 
 
@@ -129,3 +140,4 @@ if string.match(platform_info.get_image_name(), "archer%-c7") or string.match(pl
   uci:save('firewall')
   uci:save('network')
 end
+

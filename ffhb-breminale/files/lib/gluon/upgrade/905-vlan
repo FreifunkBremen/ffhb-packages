@@ -9,7 +9,9 @@ if string.match(platform_info.get_image_name(), "ubiquiti%-unifi%-ac%-mesh") or 
 
 
   local eth = 'eth0'
-  local portlist = '0t 1t 2t 3t 4t 5t'
+  local portlist = '0t 2t 3t 4t 5t'
+  local portlist_with_wan = '0t 1 2t 3t 4t 5t'
+  local wanvlan = 3
 
   if string.match(platform_info.get_image_name(), "archer%-c7") then
     eth = 'eth1'
@@ -17,6 +19,7 @@ if string.match(platform_info.get_image_name(), "ubiquiti%-unifi%-ac%-mesh") or 
 
   if string.match(platform_info.get_image_name(), "zbt%-wg3526%-32m") then
     portlist = '0t 1t 2t 3t 6t'
+    portlist_with_wan = '0t 1t 2t 3t 4 6t'
   end
   
   -- config wan to client (vlan 3)
@@ -81,11 +84,19 @@ if string.match(platform_info.get_image_name(), "ubiquiti%-unifi%-ac%-mesh") or 
   end
   else
       for i=2, 13, 1 do
-          uci:section('network', 'switch_vlan', 'vlan_' .. i, {
-              vlan = i,
-              ports = portlist,
-              device = 'switch0',
-          })
+          if i == wanvlan then
+              uci:section('network', 'switch_vlan', 'vlan_' .. i, {
+                  vlan = i,
+                  ports = portlist_with_wan,
+                  device = 'switch0',
+              })
+          else
+              uci:section('network', 'switch_vlan', 'vlan_' .. i, {
+                  vlan = i,
+                  ports = portlist,
+                  device = 'switch0',
+              })
+          end
       end
 
 

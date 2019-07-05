@@ -12,7 +12,7 @@
 static struct json_object *respondd_provider_statistics(void) {
 	struct json_object *result, *clients;
 	struct iface_list *ifaces;
-	int wifi24 = 0, wifi5 = 0, clients_count;
+	int wifi24 = 0, wifi5 = 0, total = 0, clients_count;
 
 	result = json_object_new_object();
 	if (!result)
@@ -31,6 +31,9 @@ static struct json_object *respondd_provider_statistics(void) {
 		
 		clients_count = 0;
 		get_client_counts(&clients_count, ifaces->ifx);
+
+		total += clients_count;
+
 		if (ifaces->frequency < 5000)
 			wifi24 += clients_count;
 		if (ifaces->frequency > 5000)
@@ -44,6 +47,8 @@ next_statistics: ;
 	//TODO maybe skip: if (wifi24 >  0 || wifi5 > 0) {
 	json_object_object_add(clients, "wifi24", json_object_new_int(wifi24));
 	json_object_object_add(clients, "wifi5", json_object_new_int(wifi5));
+	json_object_object_add(clients, "wifi", json_object_new_int(total));
+	json_object_object_add(clients, "total", json_object_new_int(total));
 	json_object_object_add(result, "clients", clients);
 	//}
 

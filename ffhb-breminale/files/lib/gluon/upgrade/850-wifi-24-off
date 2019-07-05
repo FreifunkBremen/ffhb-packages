@@ -9,7 +9,8 @@ if string.match(platform_info.get_image_name(), "zbt%-wg3526%-32m") then
   local function configure_radio(radio, index, _)
     local hwmode = radio.hwmode
     if hwmode == '11g' or hwmode == '11ng' then
-      uci:set("wireless", radio['.name'], "disabled", '1')
+      uci:set("wireless", "client_"..radio[".name"], "disabled", '1')
+      uci:set("wireless", "priv_"..radio[".name"], "disabled", '1')
     end
   end
 
